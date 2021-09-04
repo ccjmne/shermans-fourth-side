@@ -1,0 +1,44 @@
+$bg: hsl(223deg 14% 10%);
+$accent: darkslategrey;
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background-color: $bg;
+  display: grid;
+  align-items: stretch;
+  justify-items: stretch;
+}
+
+svg {
+  // transform: rotateX(180deg);
+
+  circle {
+    &:not([stroke]) {
+      stroke: grey;
+    }
+
+    &.vertex {
+      // stroke: $accent !important;
+      stroke: $accent;
+      stroke-width: 5px;
+      stroke-dasharray: none;
+    }
+
+    fill: none;
+    stroke-dasharray: 10 3;
+  }
+
+  path {
+    &:not([stroke]) {
+      stroke: orange;
+      stroke-dasharray: none;
+    }
+
+    stroke-dasharray: 10 3;
+  }
+}
