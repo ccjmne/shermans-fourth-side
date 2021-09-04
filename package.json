@@ -2,12 +2,9 @@
   "name": "shermans-fourth-side",
   "version": "1.0.0",
   "description": "Visual playground for B.F. Sherman's 'fourth side' of a triangle",
-  "main": "src/index.js",
-  "scripts": {
-    "lint": "eslint . --ext .ts",
-    "start:dev": "cross-env TS_NODE_CONFIG=tsconfig-webpack.json webpack serve --mode development --port 8042 --open",
-    "build:prod": "cross-env TS_NODE_CONFIG=tsconfig-webpack.json webpack --mode production"
-  },
+  "author": "Eric NICOLAS <ccjmne@gmail.com> (ccjmne)",
+  "license": "GPL-3.0",
+  "homepage": "https://github.com/ccjmne/shermans-fourth-side#readme",
   "keywords": [
     "sherman",
     "fourth",
@@ -15,8 +12,12 @@
     "triangle",
     "svg"
   ],
-  "author": "Eric NICOLAS <ccjmne@gmail.com> (ccjmne)",
-  "license": "GPL-3.0",
+  "main": "src/index.js",
+  "scripts": {
+    "lint": "eslint . --ext .ts",
+    "start:dev": "cross-env TS_NODE_CONFIG=tsconfig-webpack.json webpack serve --mode development --port 8042 --open",
+    "build:prod": "cross-env TS_NODE_CONFIG=tsconfig-webpack.json webpack --mode production"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ccjmne/shermans-fourth-side.git"
@@ -24,7 +25,9 @@
   "bugs": {
     "url": "https://github.com/ccjmne/shermans-fourth-side/issues"
   },
-  "homepage": "https://github.com/ccjmne/shermans-fourth-side#readme",
+  "dependencies": {
+    "rxjs": "^7.3.0"
+  },
   "devDependencies": {
     "@types/html-webpack-plugin": "^3.2.6",
     "@types/mini-css-extract-plugin": "^2.2.0",
@@ -51,8 +54,5 @@
     "webpack": "^5.52.0",
     "webpack-cli": "^4.8.0",
     "webpack-dev-server": "^4.1.0"
-  },
-  "dependencies": {
-    "rxjs": "^7.3.0"
   }
 }
