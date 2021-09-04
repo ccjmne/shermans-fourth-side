@@ -17,6 +17,14 @@
   ],
   "author": "Eric NICOLAS <ccjmne@gmail.com> (ccjmne)",
   "license": "GPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ccjmne/shermans-fourth-side.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ccjmne/shermans-fourth-side/issues"
+  },
+  "homepage": "https://github.com/ccjmne/shermans-fourth-side#readme",
   "devDependencies": {
     "@types/html-webpack-plugin": "^3.2.6",
     "@types/mini-css-extract-plugin": "^2.2.0",
