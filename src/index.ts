@@ -1,77 +1,75 @@
-import { debounceTime, fromEvent, map, of, pairwise, startWith, Subscription, switchMap, toArray } from 'rxjs';
+import { scaleLinear } from 'd3-scale';
+import { arc, line } from 'd3-shape';
+import { debounceTime, fromEvent, map, mapTo, startWith, Subscription } from 'rxjs';
 import createSVGElement from './elements';
-import { asLine, distance, intersection, Line, Point, Segment, throughPointWithSlope } from './geometry';
+import { angleBisector, asLine, bisector, distance, intersection, Line, perpendicular, Point, slopeThroughPoint } from './geometry';
 import './index.scss';
 
 module.hot.accept();
 const svg = createSVGElement('svg');
 document.body.appendChild(svg);
-function randomPoint(): Point {
-  const { width, height } = svg.getBoundingClientRect();
-  return { x: Math.random() * (width / 2) + width / 4, y: Math.random() * (height / 2) + height / 4 };
-}
 
 const subs: Subscription[] = [];
+
+/**
+ * Like RxJs' `pairwise` operator, but also pairs the last and first items together.
+ *
+ * For example:
+ * ```
+ * pairs('a', 'b', 'c').map(pair => pair.join(''))
+ * // ['ab', 'bc', 'ca']
+ * ```
+ */
+function pairs<T>(...items: T[]): [T, T][] {
+  const next = [...items.slice(1), items[0]];
+  return items.map((item, i) => [item, next[i]]);
+}
 
 subs.push(
   fromEvent(window, 'resize').pipe(
     startWith(null),
     debounceTime(200),
-    map(() => Array.from({ length: 3 }, randomPoint)),
-    switchMap(vertices => of(...vertices, vertices[0]).pipe(
-      pairwise(),
-      toArray<Segment>(),
-      map(lines => ({ vertices, lines })),
-    )),
-  ).subscribe(({ vertices, lines: segments }) => {
-    Array.from(svg.children).forEach(node => node.parentElement.removeChild(node));
-    vertices.forEach(({ x: cx, y: cy }) => svg.appendChild(createSVGElement('circle', { cx, cy, r: 10 }, 'vertex')));
-    segments.forEach(([{ x: x1, y: y1 }, { x: x2, y: y2 }]) => svg.appendChild(
-      createSVGElement('path', { d: `M${x1},${y1}L${x2},${y2}` }),
-    ));
+    mapTo(Array.from({ length: 3 }, () => ({ x: Math.random() * (3 / 4) + 1 / 8, y: Math.random() * (3 / 4) + 1 / 8 }))),
+    map(vertices => ({ vertices, sides: pairs(...vertices) })),
+  ).subscribe(({ vertices: [A, B, C], sides: [AB, BC, CA] }) => {
+    const { width, height } = svg.getBoundingClientRect();
+    const amplitude = Math.min(width, height);
+    const scaleX = scaleLinear([0 + (width - amplitude) / 2, width - (width - amplitude) / 2]);
+    const scaleY = scaleLinear([height - (height - amplitude) / 2, 0 + (height - amplitude) / 2]);
+    const segmentPath = line<Point>(({ x }) => scaleX(x), ({ y }) => scaleY(y));
+    const circlePath = arc<{ r: number }>().startAngle(0).endAngle(Math.PI * 2).outerRadius(({ r }) => scaleX(r) - scaleX(0));
+    const linePath = function ({ offset, slope }: Line): string {
+      return `M0,${scaleY(offset + scaleX.invert(0) * slope)}L${width},${scaleY(offset + scaleX.invert(width) * slope)}`;
+    };
 
-    const { width } = svg.getBoundingClientRect();
+    Array.from(svg.children).forEach(node => node.parentElement.removeChild(node));
+    [A, B, C].forEach(({ x, y }) => svg.appendChild(createSVGElement('circle', { cx: scaleX(x), cy: scaleY(y), r: 10 }, 'vertex')));
+    [AB, BC, CA].forEach(side => svg.appendChild(createSVGElement('path', { d: segmentPath(side) }, 'side')));
 
     (function circumcircle() {
-      /**
-       * @param line The line to bisect
-       * @returns offset and slope that correspond to the equation of the bisecting line such that `y = offset + slope * x`
-       */
-      function bisector([{ x: x1, y: y1 }, { x: x2, y: y2 }]: Segment): Line {
-        // point: midpoint through with to go
-        // slope: negative reciprocal of the original slope, so as to be perpendicular
-        return throughPointWithSlope({ x: (x1 + x2) / 2, y: (y1 + y2) / 2 }, -(x2 - x1) / (y2 - y1));
-      }
-
-      segments.map(l => bisector(l)).forEach(({ offset, slope }) => svg.appendChild(
-        createSVGElement('path', { d: `M0,${offset}L${width},${offset + slope * width}`, stroke: 'grey' }),
+      [AB, BC, CA].map(bisector).forEach(straightline => svg.appendChild(
+        createSVGElement('path', { d: linePath(straightline), stroke: 'grey' }),
       ));
 
-      const { x: cx, y: cy } = intersection(...(segments.map(bisector) as [Line, Line]));
-      const { x, y } = vertices[0];
-      svg.appendChild(createSVGElement('circle', { cx, cy, r: Math.sqrt(Math.abs(x - cx) ** 2 + Math.abs(y - cy) ** 2) }));
+      const circumcenter = intersection(bisector(AB), bisector(BC));
+      svg.appendChild(createSVGElement('path', {
+        d: circlePath({ r: distance(A, circumcenter) }),
+        transform: `translate(${scaleX(circumcenter.x)},${scaleY(circumcenter.y)})`,
+        stroke: 'grey',
+      }));
     }());
 
     (function incircle() {
-      function angleBisector([[A, B], [, C]]: [Segment, Segment]): Line {
-        function angle([{ x: x1, y: y1 }, { x: x2, y: y2 }]: Segment): number {
-          return Math.atan2(y2 - y1, x2 - x1);
-        }
+      pairs(AB, BC, CA).map(angleBisector).forEach(straightline => svg.appendChild(
+        createSVGElement('path', { d: linePath(straightline), stroke: 'lightgrey' }),
+      ));
 
-        return throughPointWithSlope(B, Math.tan((angle([B, A]) + angle([B, C])) / 2));
-      }
-
-      subs.push(of(...segments, segments[0]).pipe(
-        pairwise(),
-        map(angleBisector),
-      ).subscribe(({ offset, slope }) => svg.appendChild(
-        createSVGElement('path', { d: `M0,${offset}L${width},${offset + slope * width}`, stroke: 'lightgrey' }),
-      )));
-
-      const incenter = intersection(angleBisector([segments[0], segments[1]]), angleBisector([segments[1], segments[2]]));
-      const { offset, slope } = asLine(segments[0]);
-      const r = distance(incenter, intersection({ offset, slope }, throughPointWithSlope(incenter, -1 / slope)));
-      svg.appendChild(createSVGElement('circle', { cx: incenter.x, cy: incenter.y, r, stroke: 'lightgrey' }));
+      const incenter = intersection(angleBisector([AB, BC]), angleBisector([BC, CA]));
+      svg.appendChild(createSVGElement('path', {
+        d: circlePath({ r: distance(incenter, intersection(asLine(AB), slopeThroughPoint(perpendicular(AB), incenter))) }),
+        transform: `translate(${scaleX(incenter.x)},${scaleY(incenter.y)})`,
+        stroke: 'lightgrey',
+      }));
     }());
   }),
 );
