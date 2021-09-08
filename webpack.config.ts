@@ -26,7 +26,9 @@ export default (
   { mode }: { mode?: 'production' | 'development' } = { mode: 'production' },
 ): Configuration & { devServer: DevServerConfiguration } => ({
   entry: {
+    // FIXME: individual entries/chunks messes with HMR, sadly
     // scss: resolve(src, 'index.scss'),
+    // chalkboard: resolve(src, 'virtual-chalkboard/virtual-chalkboard.element.ts'),
     main: resolve(src, 'index.ts'),
   },
   output: {
@@ -89,6 +91,7 @@ export default (
     mode === 'production' ? new CleanWebpackPlugin() : [],
     new HtmlWebpackPlugin({
       title: name,
+      templateContent: `<virtual-chalkboard></virtual-chalkboard>`,
       meta: { author, description, keywords: keywords.join(', ') },
       filename: resolve(dist, 'index.html'),
       minify: HTML_MINIFY_OPTS,

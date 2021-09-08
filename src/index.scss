@@ -5,46 +5,43 @@ html,
 body {
   height: 100%;
   margin: 0;
+  color: ghostwhite;
 }
 
 body {
-  background-color: $bg;
   display: grid;
-  align-items: stretch;
-  justify-items: stretch;
+  background-color: $bg;
+  place-items: stretch;
 }
 
 svg {
-  // transform: rotateX(180deg);
-
-  circle {
-    &:not([stroke]) {
-      stroke: grey;
-    }
-
-    &.vertex {
-      stroke: $accent;
-      stroke-width: 5px;
-      stroke-dasharray: none;
-    }
-
+  path {
     fill: none;
+  }
+
+  circle.vertex {
+    fill: $accent;
+    stroke: lighten($accent, 15%);
+    stroke-width: 4px;
+
+    &:active {
+      stroke: ghostwhite;
+    }
+  }
+
+  g.sides {
+    stroke: orange;
+    stroke-dasharray: none;
+    stroke-width: 1.5;
+  }
+
+  g.circum {
+    stroke: grey;
     stroke-dasharray: 10 3;
   }
 
-  path {
-    fill: none;
-    &.side {
-      stroke: orange;
-      stroke-dasharray: none;
-    }
-
-    &.vertex {
-      stroke: $accent;
-      stroke-width: 5px;
-      stroke-dasharray: none;
-    }
-
+  g.in {
+    stroke: lightgrey;
     stroke-dasharray: 10 3;
   }
 }
