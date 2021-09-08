@@ -52,6 +52,23 @@ export default (
         test: /(?<!exported-vars)\.scss?$/,
         use: [MiniCssExtractPlugin.loader, 'css-loader', 'sass-loader'],
         exclude: /node_modules/,
+      }, {
+        test: /\.html$/,
+        use: [{
+          loader: 'html-loader',
+          options: {
+            esModule: false,
+            sources: {
+              list: [
+                { tag: 'img', attribute: 'src', type: 'src' },
+                { tag: 'img', attribute: 'data-src', type: 'src' },
+                { tag: 'video', attribute: 'src', type: 'src' },
+                { tag: 'video', attribute: 'data-src', type: 'src' },
+              ],
+            },
+            minimize: mode === 'production' && HTML_MINIFY_OPTS,
+          },
+        }],
       },
     ],
     // }, {
@@ -62,9 +79,10 @@ export default (
     // } as unknown], // TODO: remove 'as unknown' as soon as typings are updated for `RuleSetRule`
   },
   resolve: {
-    alias: { src },
-    extensions: ['.tsx', '.ts', '.js'],
-    modules: ['src', 'node_modules'],
+    extensions: ['.tsx', '.ts', '.js', '...'],
+    // IMPORTANT: prioritise "global" node modules, for extending modules (e.g.: d3-selection-multi enhances d3-selection)
+    modules: [resolve(__dirname, 'node_modules'), 'node_modules'],
+    mainFields: ['webpack', 'module', 'browser', 'web', 'browserify', ['jam', 'main'], 'main'],
   },
   plugins: [].concat(
     new MiniCssExtractPlugin({ filename: '[name].css', chunkFilename: '[id].css' }),

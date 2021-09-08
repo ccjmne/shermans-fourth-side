@@ -24,6 +24,9 @@ module.exports = {
     },
   },
   rules: {
+    'class-methods-use-this': ['error', { exceptMethods: ['connectedCallback', 'disconnectedCallback'] }],
+    'no-empty-function': 'off',
+    '@typescript-eslint/no-empty-function': ['error'],
     'arrow-parens': ['error', 'as-needed'],
     'comma-dangle': ['error', 'always-multiline'],
     'import/no-extraneous-dependencies': ['error', { devDependencies: ['webpack.config.ts'] }],
@@ -33,7 +36,8 @@ module.exports = {
     'semi': ['error', 'always'],
     'max-len': ['warn', 140, { ignoreTrailingComments: true, ignorePattern: '^import .*' }],
     'func-names': ['warn', 'as-needed'],
-    'no-shadow': ['error', { allow: ['_'] }],
+    'no-shadow': 'off',
+    '@typescript-eslint/no-shadow': ['error', { allow: ['_'] }],
     'linebreak-style': ['error', 'unix'],
     'quote-props': ['error', 'consistent-as-needed'],
     'object-curly-newline': ['error', {
@@ -41,5 +45,6 @@ module.exports = {
       ObjectExpression: { consistent: true, multiline: true },
       ObjectPattern: { consistent: true, multiline: true },
     }],
+    'global-require': ['off'], // deprecated, see https://eslint.org/docs/rules/global-require
   },
 };

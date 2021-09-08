@@ -1,26 +1,25 @@
 {
+  "extends": "@tsconfig/node14/tsconfig.json",
   "compileOnSave": true,
   "compilerOptions": {
     "incremental": true,
-    "baseUrl": "./",
+    "baseUrl": ".",
+    "paths": {
+      "*": ["./node_modules/@types/*"], // to avoid looking into node_modules/@types/d3-selection-multi/node_modules/@types/d3-selection/index.d.ts
+      "webpack": ["./node_modules/webpack"] // together with es-interop
+    },
+    "module": "commonjs",
+    "moduleResolution": "node",
     "outDir": "./dist/out-tsc",
     "sourceMap": true,
-    "declaration": false,
-    "module": "CommonJS",
-    "moduleResolution": "node",
-    "emitDecoratorMetadata": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "experimentalDecorators": true,
     "importHelpers": true,
+    "esModuleInterop": true,
     "resolveJsonModule": true,
     "target": "ESNext",
+    "preserveConstEnums": true,
     "noImplicitAny": true,
-    "lib": ["DOM", "ESNext"],
-    "typeRoots": [
-      "src/**/*.d.ts",
-      "node_modules/@types"
-    ]
+    "strictNullChecks": false,
+    "lib": ["DOM", "ESNext"]
   },
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "dist"]
 }
