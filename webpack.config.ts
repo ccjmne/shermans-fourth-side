@@ -1,11 +1,23 @@
 import { CleanWebpackPlugin } from 'clean-webpack-plugin';
-import HtmlWebpackPlugin from 'html-webpack-plugin';
+import HtmlWebpackPlugin, { MinifyOptions } from 'html-webpack-plugin';
 import MiniCssExtractPlugin from 'mini-css-extract-plugin';
 // import svgToMiniDataURI from 'mini-svg-data-uri';
 import { resolve } from 'path';
 import { Configuration, EntryObject } from 'webpack';
 import { Configuration as DevServerConfiguration } from 'webpack-dev-server';
 import { author, description, keywords, name } from './package.json';
+
+const HTML_MINIFY_OPTS: MinifyOptions = {
+  removeComments: true,
+  collapseWhitespace: true,
+  conservativeCollapse: true,
+  removeAttributeQuotes: true,
+  useShortDoctype: true,
+  keepClosingSlash: true,
+  minifyJS: true,
+  minifyCSS: true,
+  removeScriptTypeAttributes: true,
+};
 
 const src = resolve(__dirname, 'src');
 const dist = resolve(__dirname, 'dist');
@@ -26,8 +38,7 @@ export default (
         test: /\.tsx?$/,
         use: 'ts-loader',
         exclude: /node_modules/,
-      },
-      {
+      }, {
         test: /exported-vars\.scss$/,
         use: [
           MiniCssExtractPlugin.loader,
@@ -37,8 +48,7 @@ export default (
           },
           'sass-loader',
         ],
-      },
-      {
+      }, {
         test: /(?<!exported-vars)\.scss?$/,
         use: [MiniCssExtractPlugin.loader, 'css-loader', 'sass-loader'],
         exclude: /node_modules/,
@@ -63,9 +73,10 @@ export default (
       title: name,
       meta: { author, description, keywords: keywords.join(', ') },
       filename: resolve(dist, 'index.html'),
+      minify: HTML_MINIFY_OPTS,
     }),
   ),
-  devtool: mode === 'development' ? 'eval' : false,
+  devtool: mode === 'development' ? 'source-map' : false,
   devServer: {
     hot: true,
   },
