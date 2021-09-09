@@ -4,6 +4,7 @@ import { local, select, Selection } from 'd3-selection';
 import 'd3-selection-multi';
 import { arc, line } from 'd3-shape';
 import { BehaviorSubject, debounceTime, map, Observable, of, ReplaySubject, startWith, switchMap, takeUntil, tap, withLatestFrom } from 'rxjs';
+
 import { Angle, Circle, Line, pairs, Point, Segment, triads } from '../utils/geometry';
 import RxElement from '../utils/rx-element.class';
 
@@ -23,10 +24,9 @@ function paired<T>(items: T[]): Array<[T, T]> {
 const idx = local<number>();
 
 class VirtualChalkboard extends RxElement {
+
   private vertices$: BehaviorSubject<Point[]>;
-
   private scales$: ReplaySubject<Scales> = new ReplaySubject(1);
-
   private origin: Selection<SVGGElement, Point, null, undefined>;
 
   constructor() {
