@@ -4,7 +4,7 @@ import { local, select, Selection } from 'd3-selection';
 import 'd3-selection-multi';
 import { arc, line } from 'd3-shape';
 import { BehaviorSubject, debounceTime, map, Observable, of, ReplaySubject, startWith, switchMap, takeUntil, tap, withLatestFrom } from 'rxjs';
-import { angleBisector, bisector, distance, intersection, intersections, Line, Point, projection, Segment } from '../utils/geometry';
+import { Angle, Circle, Line, pairs, Point, Segment, triads } from '../utils/geometry';
 import RxElement from '../utils/rx-element.class';
 
 type Scales = {
@@ -12,6 +12,7 @@ type Scales = {
   λy: ScaleLinear<number, number, number>,
   Δ: ScaleLinear<number, number, number>,
   diagonal: number,
+  origin: Point,
 };
 
 function paired<T>(items: T[]): Array<[T, T]> {
@@ -30,8 +31,8 @@ class VirtualChalkboard extends RxElement {
 
   constructor() {
     super();
-    this.vertices$ = new BehaviorSubject([{ x: 0, y: 0 }, { x: 0.5, y: 0 }, { x: 0.5, y: 0.5 }]);
-    // this.vertices$ = new BehaviorSubject(Array.from({ length: 3 }, () => ({ x: Math.random() * 2 - 1, y: Math.random() * 2 - 1 })));
+    this.vertices$ = new BehaviorSubject([new Point(0, 0), new Point(0.5, 0), new Point(0.5, 0.5)]);
+    // this.vertices$ = new BehaviorSubject(Array.from({ length: 3 }, () => new Point(Math.random() * 2 - 1, Math.random() * 2 - 1)));
   }
 
   public connectedCallback(): void {
@@ -57,18 +58,18 @@ class VirtualChalkboard extends RxElement {
       );
     }(this)).pipe(
       debounceTime(200),
-      switchMap((d, i) => (i === 0
-        // no transition the first time
-        ? of(d).pipe(tap(({ width, height }) => this.origin.attr('transform', `translate(${width / 2} ${height / 2})`)))
-        : of(d).pipe(tap(({ width, height }) => this.origin.transition().attr('transform', `translate(${width / 2} ${height / 2})`)))
-      )),
-      map(({ width, height }) => ({ Δ: Math.min(width, height) / 2, diagonal: Math.sqrt(width ** 2 + height ** 2) })),
-      map(({ Δ, diagonal }) => ({
+      map(({ width: w, height: h }) => ({ Δ: Math.min(w, h) / 2, diagonal: Math.sqrt(w ** 2 + h ** 2), origin: new Point(w / 2, h / 2) })),
+      map(({ Δ, ...rest }) => ({
+        ...rest,
         λx: scaleLinear([-Δ, Δ]).domain([-1, 1]),
         λy: scaleLinear([-Δ, Δ]).domain([1, -1]),
         Δ: scaleLinear([0, Δ]),
-        diagonal,
       })),
+      switchMap((d, i) => (i === 0
+        // no transition the first time
+        ? of(d).pipe(tap(({ origin: { x, y } }) => this.origin.attr('transform', `translate(${x} ${y})`)))
+        : of(d).pipe(tap(({ origin: { x, y } }) => this.origin.transition().attr('transform', `translate(${x} ${y})`)))
+      )),
       takeUntil(super.disconnected),
     ).subscribe(this.scales$);
 
@@ -85,12 +86,12 @@ class VirtualChalkboard extends RxElement {
 
   private redraw(vertices: Point[], { λx, λy, Δ, diagonal }: Scales, smooth = false): void {
     const translate = ({ x, y }: Point): string => `translate(${λx(x)}, ${λy(y)})`;
-    const circlePath = arc<number>().startAngle(0).endAngle(Math.PI * 2).outerRadius(r => Δ(r));
     const segmentPath = line<Point>(({ x }) => λx(x), ({ y }) => λy(y));
-    const linePath = (l: Line): string => segmentPath(intersections(l, { u: 0, v: 0, r: Δ.invert(diagonal / 2) }));
+    const circlePath = arc<Circle>().startAngle(0).endAngle(Math.PI * 2).outerRadius(({ r }) => Δ(r));
+    const linePath = (l: Line): string => segmentPath(new Circle(new Point(0, 0), Δ.invert(diagonal / 2)).intersectWith(l));
 
-    const sides = paired(vertices);
-    const angles = paired(sides);
+    const sides = paired(vertices).map(([A, B]) => new Segment(A, B));
+    const angles = triads(vertices).map(([A, B, C]) => new Angle(A, B, C));
     const [A] = vertices;
     const [AB, BC] = sides;
     const [ABC, BCA] = angles;
@@ -98,44 +99,40 @@ class VirtualChalkboard extends RxElement {
     (drag<SVGCircleElement, Point>()
       .on('start', (e: DragEvent, o) => idx.set(this, this.vertices$.getValue().findIndex(({ x, y }) => o.x === x && o.y === y)))
       .on('drag', ({ x: Δx, y: Δy }: DragEvent, { x, y }) => this.vertices$.next(
-        this.vertices$.getValue().map((p, i) => (i === idx.get(this) ? { x: x + λx.invert(Δx), y: y + λy.invert(Δy) } : p)),
+        this.vertices$.getValue().map((p, i) => (i === idx.get(this) ? new Point(x + λx.invert(Δx), y + λy.invert(Δy)) : p)),
       )))(this.origin.select('g.vertices').selectAll<SVGCircleElement, Point>('circle').data(vertices).join(
         enter => enter.append('circle').attrs(({ x, y }) => ({ cx: λx(x), cy: λy(y), r: 8, class: 'vertex' })),
         update => update.call(u => (smooth ? u.transition() : u).attrs(({ x, y }) => ({ cx: λx(x), cy: λy(y) }))),
       ));
 
-    this.origin.select('g.sides')
-      .selectAll<SVGPathElement, Segment>('path').data(sides).join(
-        enter => enter.append('path').attr('d', segmentPath),
-        update => update.call(u => (smooth ? u.transition() : u).attr('d', segmentPath)),
+    this.origin.select('g.sides').selectAll<SVGPathElement, Segment>('path').data(sides).join(
+      enter => enter.append('path').attr('d', segmentPath),
+      update => update.call(u => (smooth ? u.transition() : u).attr('d', segmentPath)),
+    );
+
+    this.origin.select('g.circum').selectAll<SVGPathElement, Line>('path:not(.circle)').data(sides.map(({ bisector }) => bisector)).join(
+      enter => enter.append('path').attr('d', linePath),
+      update => update.call(u => (smooth ? u.transition() : u).attr('d', linePath)),
+    );
+
+    this.origin.select('g.circum').selectAll<SVGPathElement, Point>('path.circle')
+      .data([((O => new Circle(O, O.distanceFrom(A)))(AB.bisector.intersectWith(BC.bisector)))]).join(
+        enter => enter.append('path').attrs({ class: 'circle', transform: translate, d: circlePath }),
+        update => update.call(u => (smooth ? u.transition() : u).attrs({ transform: translate, d: circlePath })),
       );
 
-    this.origin.select('g.circum')
-      .selectAll<SVGPathElement, Line>('path:not(.circle)').data(sides.map(bisector)).join(
-        enter => enter.append('path').attr('d', linePath),
-        update => update.call(u => (smooth ? u.transition() : u).attr('d', linePath)),
-      );
+    this.origin.select('g.in').selectAll<SVGPathElement, Line>('path:not(.circle)').data(angles.map(({ bisector }) => bisector)).join(
+      enter => enter.append('path').attr('d', linePath),
+      update => update.call(u => (smooth ? u.transition() : u).attr('d', linePath)),
+    );
 
-    this.origin.select('g.circum')
-      .selectAll<SVGPathElement, Point>('path.circle').data([intersection(bisector(AB), bisector(BC))]).join(
-        enter => enter.append('path').attrs({ class: 'circle', transform: translate, d: O => circlePath(distance(A, O)) }),
-        update => update.call(u => (smooth ? u.transition() : u).attrs({ transform: translate, d: O => circlePath(distance(A, O)) })),
-      );
-
-    this.origin.select('g.in')
-      .selectAll<SVGPathElement, Line>('path:not(.circle)').data(angles.map(angleBisector)).join(
-        enter => enter.append('path').attr('d', linePath),
-        update => update.call(u => (smooth ? u.transition() : u).attr('d', linePath)),
-      );
-
-    this.origin.select('g.in')
-      .selectAll<SVGPathElement, Point>('path.circle').data([intersection(angleBisector(ABC), angleBisector(BCA))]).join(
-        enter => enter.append('path').attrs({ class: 'circle', transform: translate, d: O => circlePath(distance(O, projection(O, AB))) }),
-        update => update.call(
-          u => (smooth ? u.transition() : u).attrs({ transform: translate, d: O => circlePath(distance(O, projection(O, AB))) }),
-        ),
+    this.origin.select('g.in').selectAll<SVGPathElement, Circle>('path.circle')
+      .data([((O => new Circle(O, O.distanceFrom(O.projectOnto(AB.asLine()))))(ABC.bisector.intersectWith(BCA.bisector)))]).join(
+        enter => enter.append('path').attrs({ class: 'circle', transform: translate, d: circlePath }),
+        update => update.call(u => (smooth ? u.transition() : u).attrs({ transform: translate, d: circlePath })),
       );
   }
+
 }
 
 customElements.define('virtual-chalkboard', VirtualChalkboard);
