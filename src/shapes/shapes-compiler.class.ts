@@ -1,10 +1,10 @@
 import { scaleLinear, ScaleLinear } from 'd3-scale';
 
-import { ShapeType, ShapeTypeName as EntityType } from '../virtual-chalkboard/virtual-chalkboard.element';
+import { Circle, Line, Point, Slope } from '../geometries/module';
+import { sortBy } from '../utils/arrays';
+import UnreachableCaseError from '../utils/unreachable-case-error.class';
 
-import { sortBy } from './arrays';
-import { Circle, Line, Point, Slope } from './geometries';
-import UnreachableCaseError from './unreachable-case-error.class';
+import { ShapeType, ShapeTypeOption as ShapeTypeName } from './module';
 
 const VERTEX_RADIUS_PX = 20;
 const CLOSE_DISTANCE_THRESHOLD_PX = 20;
@@ -44,14 +44,14 @@ export default class ShapesCompiler {
 
   public getPathAttrs(shape: ShapeType): PathAttrs {
     switch (shape.type) {
-    case EntityType.POINT:
-    case EntityType.VERTEX:
+    case ShapeTypeName.POINT:
+    case ShapeTypeName.VERTEX:
       return pathAttrs(this.circlePath(new Circle(shape.geometry, this.vertexRadius)), shape);
-    case EntityType.SIDE:
+    case ShapeTypeName.SIDE:
       return pathAttrs(this.linePath([shape.geometry.from, shape.geometry.to]), shape);
-    case EntityType.LINE:
+    case ShapeTypeName.LINE:
       return pathAttrs(this.linePath(this.circumcircle.intersectWith(shape.geometry)), shape);
-    case EntityType.CIRCLE:
+    case ShapeTypeName.CIRCLE:
       return pathAttrs(this.circlePath(shape.geometry), shape);
     }
 
@@ -60,13 +60,13 @@ export default class ShapesCompiler {
 
   public getTextPathAttrs(shape: ShapeType, towards: Point): TextPathAttrs {
     switch (shape.type) {
-    case EntityType.POINT:
-    case EntityType.VERTEX:
+    case ShapeTypeName.POINT:
+    case ShapeTypeName.VERTEX:
       return this.circleTextPath(new Circle(shape.geometry, this.vertexRadius), towards);
-    case EntityType.SIDE:
-    case EntityType.LINE:
+    case ShapeTypeName.SIDE:
+    case ShapeTypeName.LINE:
       return this.lineTextPath(shape.geometry, towards);
-    case EntityType.CIRCLE:
+    case ShapeTypeName.CIRCLE:
       return this.circleTextPath(shape.geometry, towards);
     }
 
