@@ -15,8 +15,8 @@
   "main": "src/index.js",
   "scripts": {
     "lint": "eslint . --ext .ts",
-    "start:dev": "cross-env TS_NODE_CONFIG=tsconfig-webpack.json webpack serve --mode development --port 8042 --open",
-    "build:prod": "cross-env TS_NODE_CONFIG=tsconfig-webpack.json webpack --mode production"
+    "start:dev": "cross-env TS_NODE_PROJECT=\"tsconfig-webpack.json\" webpack serve --mode development --port 8042 --open",
+    "build:prod": "cross-env TS_NODE_PROJECT=\"tsconfig-webpack.json\" webpack --mode production"
   },
   "repository": {
     "type": "git",
@@ -26,11 +26,9 @@
     "url": "https://github.com/ccjmne/shermans-fourth-side/issues"
   },
   "dependencies": {
-    "d3-drag": "^3.0.0",
     "d3-scale": "^4.0.0",
     "d3-selection": "^3.0.0",
     "d3-selection-multi": "^1.0.1",
-    "d3-shape": "^3.0.1",
     "rxjs": "^7.3.0"
   },
   "devDependencies": {
