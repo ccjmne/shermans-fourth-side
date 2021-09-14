@@ -91,8 +91,8 @@ export default (
     mode === 'production' ? new CleanWebpackPlugin() : [],
     new HtmlWebpackPlugin({
       title: name,
-      templateContent: `<virtual-chalkboard></virtual-chalkboard>`,
-      meta: { author, description, keywords: keywords.join(', ') },
+      meta: { author, description, keywords: keywords.join(', '), charset: 'UTF-8' },
+      template: resolve(src, 'index.html'),
       filename: resolve(dist, 'index.html'),
       minify: HTML_MINIFY_OPTS,
     }),
