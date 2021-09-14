@@ -1,47 +1,44 @@
-$bg: hsl(223deg 14% 10%);
-$accent: darkslategrey;
-
 html,
 body {
   height: 100%;
   margin: 0;
-  color: ghostwhite;
 }
 
 body {
   display: grid;
-  background-color: $bg;
+  background-color: hsl(223deg 14% 10%);
+  font-family: sans-serif;
   place-items: stretch;
 }
 
 svg {
+  text {
+    fill: ghostwhite;
+    letter-spacing: 0.1em;
+    pointer-events: none;
+    text-anchor: middle;
+  }
+
+  .hovered {
+    stroke: crimson !important;
+    stroke-width: 2;
+  }
+
   path {
     fill: none;
-  }
-
-  circle.vertex {
-    fill: $accent;
-    stroke: lighten($accent, 15%);
-    stroke-width: 4px;
-
-    &:active {
-      stroke: ghostwhite;
-    }
-  }
-
-  g.sides {
-    stroke: orange;
-    stroke-dasharray: none;
-    stroke-width: 1.5;
-  }
-
-  g.circum {
-    stroke: grey;
-    stroke-dasharray: 10 3;
-  }
-
-  g.in {
     stroke: lightgrey;
     stroke-dasharray: 10 3;
+
+    &.vertex {
+      cursor: move;
+      fill: white;
+      mix-blend-mode: overlay;
+    }
+
+    &.side {
+      stroke: orange;
+      stroke-dasharray: none;
+      stroke-width: 2;
+    }
   }
 }
