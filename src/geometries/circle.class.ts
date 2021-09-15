@@ -1,4 +1,5 @@
 import { minBy } from '../utils/arrays';
+import { ε0 } from '../utils/limits';
 
 import { ClosestPoint, Geometry, Line, Point } from './module';
 
@@ -27,9 +28,8 @@ export default class Circle implements Geometry {
 
   public closestPointTo(point: Point): ClosestPoint {
     return minBy(
-      this.intersectWith(Line.fromPoints(this.O, point)).map(p => p.closestPointTo(point)),
-      ({ distance }) => distance,
-    ) as ClosestPoint; // always intersects, by geometric definition
+      this.intersectWith(Line.fromPoints(this.O, point)).map(p => p.closestPointTo(point)), ({ distance }) => distance,
+    ) as ClosestPoint; // these intersections must exist, by geometric definition
   }
 
   /**
@@ -41,7 +41,7 @@ export default class Circle implements Geometry {
     // (x - u)^2 + (y - v)^2 = r^2
     const { A, B, C } = line;
     const { O: { x: u, y: v }, r } = this;
-    return A === 0
+    return Math.abs(A) < ε0
       // different, simpler equation if A is naught
       // ? roots(1, -2 * u, (C / B) * (C / B + 2 * v) + v ** 2 - r ** 2).map(x => new Point(x, -C / B))
       // Further simplifying, for in that case B is 1, **by implementation**
