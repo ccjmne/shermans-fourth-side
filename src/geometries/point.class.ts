@@ -13,7 +13,7 @@ export default class Point implements Geometry {
   }
 
   public projectOnto(line: Line): Point {
-    return line.intersectWith(new Line(line.slope.perpendicular, this)) as Point; // always intersects, by geometric definition
+    return line.intersectWith(new Line(line.vector.perpendicular, this)) as Point; // always intersects, by geometric definition
   }
 
 }

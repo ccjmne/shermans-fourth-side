@@ -1,6 +1,6 @@
 import { scaleLinear, ScaleLinear } from 'd3-scale';
 
-import { Circle, Line, Point, Slope } from '../geometries/module';
+import { Circle, Line, Point, Vector } from '../geometries/module';
 import { sortBy } from '../utils/arrays';
 import UnreachableCaseError from '../utils/unreachable-case-error.class';
 
@@ -107,7 +107,7 @@ export default class ShapesCompiler {
 
   private circleTextPath(circle: Circle, at: Point): TextPathAttrs {
     const above = at.y >= circle.O.y;
-    return textPathAttrs(this.circlePath(circle, above, Slope.fromPoints(circle.O, at).angle), above);
+    return textPathAttrs(this.circlePath(circle, above, Vector.fromPoints(circle.O, at).angle), above);
   }
 
 }

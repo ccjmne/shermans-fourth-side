@@ -1,11 +1,11 @@
 import { minBy } from '../utils/arrays';
 
-import { ClosestPoint, Geometry, Line, Point, Slope } from './module';
+import { ClosestPoint, Geometry, Line, Point, Vector } from './module';
 
 export default class Segment extends Line implements Geometry {
 
   constructor(public readonly from: Point, public readonly to: Point) {
-    super(Slope.fromPoints(from, to), from);
+    super(Vector.fromPoints(from, to), from);
   }
 
   public get length(): number {
@@ -18,7 +18,7 @@ export default class Segment extends Line implements Geometry {
   }
 
   public bisector(): Line {
-    return new Line(this.slope.perpendicular, this.midpoint);
+    return new Line(this.vector.perpendicular, this.midpoint);
   }
 
   // TODO: maybe the implementation can be somewhat simpler?

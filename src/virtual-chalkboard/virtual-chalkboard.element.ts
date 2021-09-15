@@ -75,7 +75,7 @@ class VirtualChalkboard extends RxElement {
     this.vertices$.pipe(
       map(vertices => {
         const sides = pairs(vertices).map(([A, B]) => Shapes.side(new Segment(A.geometry, B.geometry), `${A.name}${B.name}`));
-        const sideLines = sides.map(s => Shapes.line(new Line(s.geometry.slope, s.geometry.from), `${s.name} (extended)`));
+        const sideLines = sides.map(s => Shapes.line(new Line(s.geometry.vector, s.geometry.from), `${s.name} (extended)`));
         const lateralBisectors = sides.map(({ geometry, name }) => Shapes.line(geometry.bisector(), `bisector of ${name}`));
         const angularBisectors = triads(vertices).map(([A, B, C]) => Shapes.line(new Angle(A.geometry, B.geometry, C.geometry).bisector(), `bisector of angle ${A.name}${B.name}${C.name}`));
         const [[{ geometry: A }], [{ geometry: AB }], [{ geometry: l1 }, { geometry: l2 }], [{ geometry: l3 }, { geometry: l4 }]] = [vertices, sides, lateralBisectors, angularBisectors];

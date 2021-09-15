@@ -1,6 +1,6 @@
 import { Maybe } from '../utils/maybe';
 
-import { ClosestPoint, Geometry, Point, Slope } from './module';
+import { ClosestPoint, Geometry, Point, Vector } from './module';
 
 // Described internally such as `Ax + By + C = 0`.
 export default class Line implements Geometry {
@@ -9,12 +9,12 @@ export default class Line implements Geometry {
   public readonly B: number;
   public readonly C: number;
 
-  constructor(public readonly slope: Slope, { x, y }: Point) {
-    [this.A, this.B, this.C] = slope.isVertical() ? [1, 0, -x] : [-slope, 1, +slope * x - y];
+  constructor(public readonly vector: Vector, { x, y }: Point) {
+    [this.A, this.B, this.C] = vector.isVertical() ? [1, 0, -x] : [-vector.slope, 1, vector.slope * x - y];
   }
 
   public static fromPoints(from: Point, to: Point): Line {
-    return new Line(Slope.fromPoints(from, to), from);
+    return new Line(Vector.fromPoints(from, to), from);
   }
 
   public closestPointTo(point: Point): ClosestPoint {
@@ -24,8 +24,8 @@ export default class Line implements Geometry {
   /**
     * No intersection iff parallel to `this`.
     */
-  public intersectWith({ A: A2, B: B2, C: C2, slope }: Line): Maybe<Point> {
-    if (this.slope.isParallelTo(slope)) {
+  public intersectWith({ A: A2, B: B2, C: C2, vector }: Line): Maybe<Point> {
+    if (this.vector.isParallelTo(vector)) {
       return null;
     }
 
