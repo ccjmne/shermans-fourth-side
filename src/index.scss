@@ -40,5 +40,10 @@ svg {
       stroke-dasharray: none;
       stroke-width: 2;
     }
+
+    &.angle {
+      stroke: lightgrey;
+      stroke-dasharray: none;
+    }
   }
 }

@@ -1,4 +1,4 @@
-import { Circle, Line, Point, Segment } from '../geometries/module';
+import { Angle, Circle, Line, Point, Segment } from '../geometries/module';
 import { Maybe } from '../utils/maybe';
 
 import Shape from './shape.class';
@@ -6,14 +6,15 @@ import ShapesCompiler from './shapes-compiler.class';
 
 export { ShapesCompiler };
 
-export enum ShapeTypeOption { VERTEX='vertex', POINT='point', SIDE='side', LINE='line', CIRCLE='circle' }
+export enum ShapeTypeOption { VERTEX='vertex', POINT='point', SIDE='side', LINE='line', CIRCLE='circle', ANGLE='angle' }
 export type ShapeTypePriority = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 export type ShapeVertex = Shape<ShapeTypeOption.VERTEX, Point>;
 export type ShapeType = ShapeVertex
   | Shape<ShapeTypeOption.POINT, Point>
   | Shape<ShapeTypeOption.SIDE, Segment>
   | Shape<ShapeTypeOption.LINE, Line>
-  | Shape<ShapeTypeOption.CIRCLE, Circle>;
+  | Shape<ShapeTypeOption.CIRCLE, Circle>
+  | Shape<ShapeTypeOption.ANGLE, Angle>;
 
 export default class Shapes {
 
@@ -40,6 +41,10 @@ export default class Shapes {
 
   public static circle(circle: Circle, name: string): Shape<ShapeTypeOption.CIRCLE, Circle> {
     return new Shape(ShapeTypeOption.CIRCLE, circle, name);
+  }
+
+  public static angle(angle: Angle, name: string): Shape<ShapeTypeOption.ANGLE, Angle> {
+    return new Shape(ShapeTypeOption.ANGLE, angle, name);
   }
 
   public static priority({ type }: ShapeType): ShapeTypePriority {

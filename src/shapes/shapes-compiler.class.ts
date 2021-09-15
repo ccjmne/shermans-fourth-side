@@ -1,6 +1,6 @@
 import { scaleLinear, ScaleLinear } from 'd3-scale';
 
-import { Circle, Line, Point, Vector } from '../geometries/module';
+import { Angle, Circle, Line, Point, Vector } from '../geometries/module';
 import { sortBy } from '../utils/arrays';
 import UnreachableCaseError from '../utils/unreachable-case-error.class';
 
@@ -53,6 +53,8 @@ export default class ShapesCompiler {
       return pathAttrs(this.linePath(this.circumcircle.intersectWith(shape.geometry)), shape);
     case ShapeTypeName.CIRCLE:
       return pathAttrs(this.circlePath(shape.geometry), shape);
+    case ShapeTypeName.ANGLE:
+      return pathAttrs(this.anglePath(shape.geometry, this.λ.invert(VERTEX_RADIUS_PX * 2)), shape);
     }
 
     throw new UnreachableCaseError(shape);
@@ -68,6 +70,8 @@ export default class ShapesCompiler {
       return this.lineTextPath(shape.geometry, towards);
     case ShapeTypeName.CIRCLE:
       return this.circleTextPath(shape.geometry, towards);
+    case ShapeTypeName.ANGLE:
+      return this.circleTextPath(new Circle(shape.geometry.B, this.λ.invert(VERTEX_RADIUS_PX * 2)), towards);
     }
 
     throw new UnreachableCaseError(shape);
@@ -94,11 +98,27 @@ export default class ShapesCompiler {
     const Δx = Math.cos(angle);
     const Δy = Math.sin(angle);
     const from = new Point(x - Δx * r, y - Δy * r);
-    const at = new Point(x + Δx * r, y + Δy * r);
+    const to = new Point(x + Δx * r, y + Δy * r);
+    const λr = this.λ(r);
 
     return `M${this.coords(from)}
-      A${r},${r} 0 ${1} ${+sweep} ${this.coords(at)}
-      A${r},${r} 0 ${1} ${+sweep} ${this.coords(from)}`;
+      A${λr},${λr} 0 ${1} ${+sweep} ${this.coords(to)}
+      A${λr},${λr} 0 ${1} ${+sweep} ${this.coords(from)}`;
+  }
+
+  private anglePath(angle: Angle, r: number): string {
+    const { B: { x, y }, BA, BC } = angle;
+    const [toA, toC] = [BA, BC].map(vector => vector.magnitude(angle.isNearlyRight() ? r * (Math.SQRT2 / 2) : r));
+    const from = new Point(x + toA.Δx, y + toA.Δy);
+    const to = new Point(x + toC.Δx, y + toC.Δy);
+    const λr = this.λ(r);
+
+    if (angle.isNearlyRight()) {
+      return this.linePath([from, new Point(x + (toA.Δx + toC.Δx), y + (toA.Δy + toC.Δy)), to]);
+    }
+
+    return `M${this.coords(from)}
+      A${λr},${λr} 0 ${0} ${+angle.isClockwise()} ${this.coords(to)}`;
   }
 
   private lineTextPath(line: Line, at: Point): TextPathAttrs {
