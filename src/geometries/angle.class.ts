@@ -37,7 +37,7 @@ export default class Angle implements Geometry {
   }
 
   /**
-   * True iff within `Math.PI / 60` radians (3 degrees) of a pure straight angle.
+   * True iff within `Math.PI / 180` radians (1 degree) of a pure straight angle.
    */
   public isNearlyStraight(): boolean {
     return Math.abs(this.AC.angle - this.BC.angle) < εθ;
