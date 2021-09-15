@@ -6,9 +6,9 @@ export function pairs<T>(items: T[]): Array<[T, T]> {
 }
 
 export function triads<T>(items: T[]): Array<[T, T, T]> {
-  const second = [...items.slice(1), items[0]];
-  const third = [...items.slice(-1), ...items.slice(0, items.length - 1)];
-  return items.map((item, i) => [item, second[i], third[i]]);
+  const one = [...items.slice(-1), ...items.slice(0, items.length - 1)];
+  const three = [...items.slice(1), items[0]];
+  return items.map((item, i) => [one[i], item, three[i]]);
 }
 
 export function sortBy<T, V extends number>(items: T[], by: (item: T) => V, order: 'asc' | 'desc' = 'asc'): T[] {

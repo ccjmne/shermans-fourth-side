@@ -13,7 +13,7 @@ class VirtualChalkboard extends RxElement {
 
   private svg!: SVGSVGElement;
   private Ω!: Selection<SVGGElement, unknown, HTMLElement, unknown>;
-  private vertices$: BehaviorSubject<ShapeVertex[]>;
+  private readonly vertices$: BehaviorSubject<ShapeVertex[]>;
 
   constructor() {
     super();
@@ -77,13 +77,20 @@ class VirtualChalkboard extends RxElement {
         const sides = pairs(vertices).map(([A, B]) => Shapes.side(new Segment(A.geometry, B.geometry), `${A.name}${B.name}`));
         const sideLines = sides.map(s => Shapes.line(new Line(s.geometry.vector, s.geometry.from), `${s.name} (extended)`));
         const lateralBisectors = sides.map(({ geometry, name }) => Shapes.line(geometry.bisector(), `bisector of ${name}`));
-        const angularBisectors = triads(vertices).map(([A, B, C]) => Shapes.line(new Angle(A.geometry, B.geometry, C.geometry).bisector(), `bisector of angle ${A.name}${B.name}${C.name}`));
+        const angles = triads(vertices).map(([A, B, C]) => Shapes.angle(new Angle(A.geometry, B.geometry, C.geometry), `angle ${A.name}${B.name}${C.name}`));
+        const angularBisectors = angles.map(θ => Shapes.line(θ.geometry.bisector(), `bisector of ${θ.name}`));
+        const external = angles.map(θ => Shapes.line(θ.geometry.bisector(true), `external bisector of ${θ.name}`));
+        if (angles.some(θ => θ.geometry.isNearlyStraight())) {
+          return [...sideLines, ...lateralBisectors, ...angularBisectors, ...external, ...angles, ...sides, ...vertices];
+        }
+
+        const excircles = pairs(external).map(([{ geometry: l1 }, { geometry: l2 }]) => l1.intersectWith(l2) as Point).map((O, i) => Shapes.circle(new Circle(O, sides[i].geometry.closestPointTo(O).distance), `excircle to ${sides[i].name}`));
         const [[{ geometry: A }], [{ geometry: AB }], [{ geometry: l1 }, { geometry: l2 }], [{ geometry: l3 }, { geometry: l4 }]] = [vertices, sides, lateralBisectors, angularBisectors];
         const [circumcenter, incenter] = [l1.intersectWith(l2) as Point, l3.intersectWith(l4) as Point]; // these intersections can't be `null`, by geometric definition
         const circumcircle = Shapes.circle(new Circle(circumcenter, circumcenter.distanceFrom(A)), 'circumcircle of ABC');
         const incircle = Shapes.circle(new Circle(incenter, incenter.distanceFrom(incenter.projectOnto(AB))), 'incircle of ABC');
 
-        return [...sideLines, ...lateralBisectors, ...angularBisectors, circumcircle, incircle, ...sides, ...vertices];
+        return [...sideLines, ...lateralBisectors, ...angularBisectors, circumcircle, incircle, ...external, ...excircles, ...angles, ...sides, ...vertices];
       }),
       takeUntil(super.disconnected),
     ).subscribe(shapes$);
