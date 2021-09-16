@@ -1,9 +1,10 @@
-import { select, Selection } from 'd3-selection';
+import { select, selectAll, Selection } from 'd3-selection';
 import 'd3-selection-multi';
 import { BehaviorSubject, combineLatest, debounceTime, distinctUntilChanged, EMPTY, endWith, exhaustMap, filter, fromEvent, map, mapTo, merge, Observable, ReplaySubject, startWith, Subject, switchMap, takeUntil, tap, withLatestFrom } from 'rxjs';
 
 import { Angle, Circle, Line, Point, Segment } from '../geometries/module';
 import Shapes, { ShapesCompiler, ShapeType, ShapeVertex } from '../shapes/module';
+import { BisectorShape, Mark, SideShape } from '../shapes/shape.class'; // TODO: import from ../shapes/module
 import { minBy, pairs, triads } from '../utils/arrays';
 import { Maybe } from '../utils/maybe';
 import RxElement from '../utils/rx-element.class';
@@ -74,23 +75,26 @@ class VirtualChalkboard extends RxElement {
 
     this.vertices$.pipe(
       map(vertices => {
-        const sides = pairs(vertices).map(([A, B]) => Shapes.side(new Segment(A.geometry, B.geometry), `${A.name}${B.name}`));
+        const sides = pairs(vertices).map(([A, B]) => new SideShape(
+          new Segment(A.geometry, B.geometry),
+          `${A.name}${B.name}`,
+        ));
+        const perpBisectors = sides.map(side => new BisectorShape(side));
         const sideLines = sides.map(s => Shapes.line(new Line(s.geometry.vector, s.geometry.from), `${s.name} (extended)`));
-        const lateralBisectors = sides.map(({ geometry, name }) => Shapes.line(geometry.bisector(), `bisector of ${name}`));
         const angles = triads(vertices).map(([A, B, C]) => Shapes.angle(new Angle(A.geometry, B.geometry, C.geometry), `angle ${A.name}${B.name}${C.name}`));
         const angularBisectors = angles.map(θ => Shapes.line(θ.geometry.bisector(), `bisector of ${θ.name}`));
         const external = angles.map(θ => Shapes.line(θ.geometry.bisector(true), `external bisector of ${θ.name}`));
         if (angles.some(θ => θ.geometry.isNearlyStraight())) {
-          return [...sideLines, ...lateralBisectors, ...angularBisectors, ...external, ...angles, ...sides, ...vertices];
+          return [...sideLines, ...perpBisectors, ...angularBisectors, ...external, ...angles, ...sides, ...vertices];
         }
 
         const excircles = pairs(external).map(([{ geometry: l1 }, { geometry: l2 }]) => l1.intersectWith(l2) as Point).map((O, i) => Shapes.circle(new Circle(O, sides[i].geometry.closestPointTo(O).distance), `excircle to ${sides[i].name}`));
-        const [[{ geometry: A }], [{ geometry: AB }], [{ geometry: l1 }, { geometry: l2 }], [{ geometry: l3 }, { geometry: l4 }]] = [vertices, sides, lateralBisectors, angularBisectors];
+        const [[{ geometry: A }], [{ geometry: AB }], [{ geometry: l1 }, { geometry: l2 }], [{ geometry: l3 }, { geometry: l4 }]] = [vertices, sides, perpBisectors, angularBisectors];
         const [circumcenter, incenter] = [l1.intersectWith(l2) as Point, l3.intersectWith(l4) as Point]; // these intersections can't be `null`, by geometric definition
         const circumcircle = Shapes.circle(new Circle(circumcenter, circumcenter.distanceFrom(A)), 'circumcircle of ABC');
         const incircle = Shapes.circle(new Circle(incenter, incenter.distanceFrom(incenter.projectOnto(AB))), 'incircle of ABC');
 
-        return [...sideLines, ...lateralBisectors, ...angularBisectors, circumcircle, incircle, ...external, ...excircles, ...angles, ...sides, ...vertices];
+        return [...sideLines, ...perpBisectors, ...angularBisectors, circumcircle, incircle, ...external, ...excircles, ...angles, ...sides, ...vertices];
       }),
       takeUntil(super.disconnected),
     ).subscribe(shapes$);
@@ -140,9 +144,14 @@ class VirtualChalkboard extends RxElement {
         highlight.text.select('textPath').text(shape.name);
         highlight.text.attrs(compiler.getTextPathAttrs(shape, mouse));
         highlight.textPath.elem.attrs(compiler.getTextPathAttrs(shape, mouse));
-        select(this.svg.querySelector(`path[name='${shape.name}']`)).raise().classed('hovered', true);
+        selectAll([shape, ...shape.linked].map(({ name }) => this.svg.querySelector(`path[name='${name}']`))).raise().classed('hovered', true);
+        this.Ω.select('g.marks').selectAll<SVGUseElement, Mark>('use').data(shape.marks).join(
+          enter => enter.append('use').attrs(mark => compiler.getMarkAttrs(mark)),
+          update => update.attrs(mark => compiler.getMarkAttrs(mark)),
+        );
       } else {
         highlight.text.select('textPath').text('');
+        this.Ω.select('g.marks').selectAll('use').data([]).join(enter => enter, update => update);
       }
     });
   }
@@ -151,15 +160,15 @@ class VirtualChalkboard extends RxElement {
     this.vertices$.next(this.vertices$.getValue().map(v => (v.name === hovered.name ? hovered.reshape(at) : v)));
   }
 
-  private redraw(vertices: ShapeType[], shapes: ShapeType[], gen: ShapesCompiler, smooth = false): void {
+  private redraw(vertices: ShapeType[], shapes: ShapeType[], compiler: ShapesCompiler, smooth = false): void {
     this.Ω.select('g.shapes').selectAll<SVGPathElement, ShapeType>('path').data(shapes.filter(shape => !Shapes.isVertex(shape)), Shapes.identify).join(
-      enter => enter.append('path').attrs(s => gen.getPathAttrs(s)),
-      update => update.call(u => (smooth ? u.transition() : u).attrs(s => gen.getPathAttrs(s))),
+      enter => enter.append('path').attrs(s => compiler.getPathAttrs(s)),
+      update => update.call(u => (smooth ? u.transition() : u).attrs(s => compiler.getPathAttrs(s))),
     );
 
     this.Ω.select('g.vertices').selectAll<SVGPathElement, ShapeType>('path').data(vertices, Shapes.identify).join(
-      enter => enter.append('path').attrs(s => gen.getPathAttrs(s)),
-      update => update.call(u => (smooth ? u.transition() : u).attrs(s => gen.getPathAttrs(s))),
+      enter => enter.append('path').attrs(s => compiler.getPathAttrs(s)),
+      update => update.call(u => (smooth ? u.transition() : u).attrs(s => compiler.getPathAttrs(s))),
     );
   }
 

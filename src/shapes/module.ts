@@ -21,6 +21,7 @@ export default class Shapes {
   private static readonly PRIORITIES: {[key in ShapeTypeOption]?: ShapeTypePriority } = {
     [ShapeTypeOption.VERTEX]: 0,
     [ShapeTypeOption.POINT]: 1,
+    [ShapeTypeOption.SIDE]: 1,
   };
 
   public static vertex(point: Point, name: string): ShapeVertex {

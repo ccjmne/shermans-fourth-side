@@ -5,13 +5,19 @@ import { sortBy } from '../utils/arrays';
 import UnreachableCaseError from '../utils/unreachable-case-error.class';
 
 import { ShapeType, ShapeTypeOption as ShapeTypeName } from './module';
+import { Mark } from './shape.class'; // TODO: import from ./module
 
 const VERTEX_RADIUS_PX = 20;
 const CLOSE_DISTANCE_THRESHOLD_PX = 20;
 const TEXT_DY = 5;
 
+export type MarkAttrs = Partial<{ href: string, transform: string, name: string}>; // TODO: name?? maybe compute that one from its `Shape`'s name + its mark index?
 export type PathAttrs = Partial<{ d: string, class: string, name: string }>;
 export type TextPathAttrs = Partial<{ d: string, dy: number, 'dominant-baseline': string }>;
+
+function markAttrs(transform: string, kind: string): MarkAttrs {
+  return { transform, href: `#mark:${kind}` };
+}
 
 function pathAttrs(d: string, { type, name }: ShapeType): PathAttrs {
   return { d, class: type, name };
@@ -40,6 +46,11 @@ export default class ShapesCompiler {
     this.circumcircle = new Circle(new Point(0, 0), this.λ.invert(Math.sqrt(width ** 2 + height ** 2)) / 2);
     this.vertexRadius = this.λ.invert(VERTEX_RADIUS_PX);
     this.distanceThreshold = this.λ.invert(CLOSE_DISTANCE_THRESHOLD_PX);
+  }
+
+  // TODO: perhaps also take its corresponding `Shape`?
+  public getMarkAttrs({ kind, at, rotate }: Mark): MarkAttrs {
+    return markAttrs(`translate(${this.coords(at)}) rotate(${rotate * (180 / Math.PI)})`, kind);
   }
 
   public getPathAttrs(shape: ShapeType): PathAttrs {
