@@ -1,9 +1,11 @@
-import { Maybe } from '../utils/maybe';
+import { type Maybe } from '../utils/maybe';
 
-import { ClosestPoint, Geometry, Point, Vector } from './module';
+import { type ClosestPoint, type Geometry } from './module';
+import { Point } from './point.class';
+import { Vector } from './vector.class';
 
 // Described internally such as `Ax + By + C = 0`.
-export default class Line implements Geometry {
+export class Line implements Geometry {
 
   public readonly A: number;
   public readonly B: number;
@@ -13,12 +15,18 @@ export default class Line implements Geometry {
     [this.A, this.B, this.C] = vector.isVertical() ? [1, 0, -x] : [-vector.slope, 1, vector.slope * x - y];
   }
 
+  // Can't use `Segment#new` here 'cause then we'd have a `Segment` rather than a `Line`, with a different `closestPointTo`, for instance...
   public static fromPoints(from: Point, to: Point): Line {
     return new Line(Vector.fromPoints(from, to), from);
   }
 
   public closestPointTo(point: Point): ClosestPoint {
-    return point.projectOnto(this).closestPointTo(point);
+    return this.project(point).closestPointTo(point);
+  }
+
+  public project(point: Point): Point {
+    // always intersects, by geometric definition
+    return this.intersectWith(new Line(this.vector.perpendicular, point)) as Point;
   }
 
   /**

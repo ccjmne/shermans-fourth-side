@@ -102,6 +102,6 @@ export default (
     hot: true,
   },
   optimization: {
-    runtimeChunk: mode === 'production' ? 'single' : { name: (entrypoint: EntryObject) => `runtime~${entrypoint.name}` },
+    runtimeChunk: mode === 'production' ? 'single' : { name: (entrypoint: EntryObject) => `runtime~${entrypoint.name as string}` },
   },
 });

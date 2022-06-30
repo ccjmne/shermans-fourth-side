@@ -4,29 +4,30 @@ import { Angle, Circle, Line, Point, Vector } from '../geometries/module';
 import { sortBy } from '../utils/arrays';
 import UnreachableCaseError from '../utils/unreachable-case-error.class';
 
-import { ShapeType, ShapeTypeOption as ShapeTypeName } from './module';
-import { Mark } from './shape.class'; // TODO: import from ./module
+import { type Mark } from './mark.class';
+import { ShapeType, type Shape } from './shape.class';
 
 const VERTEX_RADIUS_PX = 20;
 const CLOSE_DISTANCE_THRESHOLD_PX = 20;
-const TEXT_DY = 5;
+const TEXT_PADDING = 5;
 
-export type MarkAttrs = Partial<{ href: string, transform: string, name: string}>; // TODO: name?? maybe compute that one from its `Shape`'s name + its mark index?
+export type MarkAttrs = Partial<{ href: string, transform: string, name: string }>; // TODO: name?? maybe compute that one from its `Shape`'s name + its mark index?
 export type PathAttrs = Partial<{ d: string, class: string, name: string }>;
-export type TextPathAttrs = Partial<{ d: string, dy: number, 'dominant-baseline': string }>;
+export type TextPathAttrs = { d: string, dy: number, 'dominant-baseline': string, clip: string };
 
 function markAttrs(transform: string, kind: string): MarkAttrs {
   return { transform, href: `#mark:${kind}` };
 }
 
-function pathAttrs(d: string, { type, name }: ShapeType): PathAttrs {
+function pathAttrs(d: string, { type, name }: Shape): PathAttrs {
   return { d, class: type, name };
 }
-function textPathAttrs(d: string, above = true): TextPathAttrs {
-  return { d, 'dominant-baseline': above ? 'ideographic' : 'hanging', 'dy': above ? -TEXT_DY : TEXT_DY };
+
+function textPathAttrs(d: string, clip: string, above = true): TextPathAttrs {
+  return { d, 'dominant-baseline': above ? 'ideographic' : 'hanging', 'dy': above ? -TEXT_PADDING : TEXT_PADDING, clip };
 }
 
-export default class ShapesCompiler {
+export class ShapesCompiler {
 
   public readonly distanceThreshold: number;
   public readonly Ω: { x: number, y: number };
@@ -50,39 +51,39 @@ export default class ShapesCompiler {
 
   // TODO: perhaps also take its corresponding `Shape`?
   public getMarkAttrs({ kind, at, rotate }: Mark): MarkAttrs {
-    return markAttrs(`translate(${this.coords(at)}) rotate(${rotate * (180 / Math.PI)})`, kind);
+    return markAttrs(`translate(${this.coords(at)}) rotate(${rotate * (-180 / Math.PI)})`, kind);
   }
 
-  public getPathAttrs(shape: ShapeType): PathAttrs {
+  public getPathAttrs(shape: Shape): PathAttrs {
     switch (shape.type) {
-    case ShapeTypeName.POINT:
-    case ShapeTypeName.VERTEX:
-      return pathAttrs(this.circlePath(new Circle(shape.geometry, this.vertexRadius)), shape);
-    case ShapeTypeName.SIDE:
+    case ShapeType.POINT:
+    case ShapeType.VERTEX:
+      return pathAttrs(this.pointPath(shape.geometry), shape);
+    case ShapeType.SIDE:
       return pathAttrs(this.linePath([shape.geometry.from, shape.geometry.to]), shape);
-    case ShapeTypeName.LINE:
+    case ShapeType.LINE:
       return pathAttrs(this.linePath(this.circumcircle.intersectWith(shape.geometry)), shape);
-    case ShapeTypeName.CIRCLE:
+    case ShapeType.CIRCLE:
       return pathAttrs(this.circlePath(shape.geometry), shape);
-    case ShapeTypeName.ANGLE:
+    case ShapeType.ANGLE:
       return pathAttrs(this.anglePath(shape.geometry, this.λ.invert(VERTEX_RADIUS_PX * 2)), shape);
     }
 
     throw new UnreachableCaseError(shape);
   }
 
-  public getTextPathAttrs(shape: ShapeType, towards: Point): TextPathAttrs {
+  public getTextPathAttrs(shape: Shape, towards: Point, measurements: { fontSize: number, textLength: number }): TextPathAttrs {
     switch (shape.type) {
-    case ShapeTypeName.POINT:
-    case ShapeTypeName.VERTEX:
-      return this.circleTextPath(new Circle(shape.geometry, this.vertexRadius), towards);
-    case ShapeTypeName.SIDE:
-    case ShapeTypeName.LINE:
-      return this.lineTextPath(shape.geometry, towards);
-    case ShapeTypeName.CIRCLE:
-      return this.circleTextPath(shape.geometry, towards);
-    case ShapeTypeName.ANGLE:
-      return this.circleTextPath(new Circle(shape.geometry.B, this.λ.invert(VERTEX_RADIUS_PX * 2)), towards);
+    case ShapeType.POINT:
+    case ShapeType.VERTEX:
+      return this.pointTextPath(shape.geometry, measurements);
+    case ShapeType.SIDE:
+    case ShapeType.LINE:
+      return this.lineTextPath(shape.geometry, towards, measurements);
+    case ShapeType.CIRCLE:
+      return this.circleTextPath(shape.geometry, towards, measurements);
+    case ShapeType.ANGLE:
+      return this.circleTextPath(new Circle(shape.geometry.B, this.λ.invert(VERTEX_RADIUS_PX * 2)), towards, measurements);
     }
 
     throw new UnreachableCaseError(shape);
@@ -92,12 +93,12 @@ export default class ShapesCompiler {
     return new Point(this.λx.invert(clientX - this.Ω.x), this.λy.invert(clientY - this.Ω.y));
   }
 
-  private coords({ x, y }: Point): string {
+  public coords({ x, y }: Point): string {
     return `${this.λx(x)},${this.λy(y)}`;
   }
 
-  private linePath(points: Point[]): string {
-    return `M${points.map(p => this.coords(p)).join('L')}`;
+  private linePath(points: Point[], closed = false): string {
+    return `M${points.map(p => this.coords(p)).join('L')}${closed ? 'z' : ''}`;
   }
 
   /**
@@ -114,12 +115,19 @@ export default class ShapesCompiler {
 
     return `M${this.coords(from)}
       A${λr},${λr} 0 ${1} ${+sweep} ${this.coords(to)}
-      A${λr},${λr} 0 ${1} ${+sweep} ${this.coords(from)}`;
+      A${λr},${λr} 0 ${1} ${+sweep} ${this.coords(from)}z`;
   }
 
+  private pointPath(point: Point): string {
+    return `M${this.coords(point)} m-5,-5 l10,10 m-10,0 l10,-10`;
+  }
+
+  /**
+   * Compiles either a right-angle mark (for PI/2 angles) or an arc
+   */
   private anglePath(angle: Angle, r: number): string {
     const { B: { x, y }, BA, BC } = angle;
-    const [toA, toC] = [BA, BC].map(vector => vector.magnitude(angle.isNearlyRight() ? r * (Math.SQRT2 / 2) : r));
+    const [toA, toC] = [BA, BC].map(vector => vector.resize(angle.isNearlyRight() ? r * (Math.SQRT2 / 2) : r));
     const from = new Point(x + toA.Δx, y + toA.Δy);
     const to = new Point(x + toC.Δx, y + toC.Δy);
     const λr = this.λ(r);
@@ -132,13 +140,68 @@ export default class ShapesCompiler {
       A${λr},${λr} 0 ${0} ${+angle.isClockwise()} ${this.coords(to)}`;
   }
 
-  private lineTextPath(line: Line, at: Point): TextPathAttrs {
-    return textPathAttrs(this.linePath(sortBy(new Circle(at, this.circumcircle.r).intersectWith(line), ({ x }) => x)));
+  /**
+   * Compiles `textPath` for text that follows a line.
+   *
+   * Always has the text sit on the upper side, or to the right when following a vertical line.
+   */
+  private lineTextPath(line: Line, at: Point, { fontSize, textLength }: { fontSize: number, textLength: number }): TextPathAttrs {
+    const p = line.closestPointTo(at);
+    const length = this.λ.invert(textLength + 2 * TEXT_PADDING);
+    const height = this.λ.invert(fontSize + 2 * TEXT_PADDING);
+    const [A, B] = new Circle(p, length / 2).intersectWith(line);
+    const { Δx, Δy } = line.vector.perpendicular.resize(height);
+    const upside = Δy < 0 // always towards positive y-values, or positive x-values if Δy is null (vertical line)
+      ? new Vector(-Δx, -Δy)
+      : new Vector(Δy === 0 ? Math.abs(Δx) : Δx, Δy);
+
+    return textPathAttrs(
+      this.linePath(sortBy([A, B], ({ x }) => x)),
+      this.linePath([A, B, B.translate(upside), A.translate(upside)], true),
+    );
   }
 
-  private circleTextPath(circle: Circle, at: Point): TextPathAttrs {
-    const above = at.y >= circle.O.y;
-    return textPathAttrs(this.circlePath(circle, above, Vector.fromPoints(circle.O, at).angle), above);
+  /**
+   * Compiles `textPath` for text skirting  a circle.
+   *
+   * Always has the text right side up, either above or below the circle, depending on proximity from the supplied `at` point.
+   */
+  private circleTextPath(circle: Circle, at: Point, { fontSize, textLength }: { fontSize: number, textLength: number }): TextPathAttrs {
+    const { r, O } = circle;
+    const above = at.y >= O.y;
+    const length = this.λ.invert(textLength + 2 * TEXT_PADDING);
+    const height = this.λ.invert(fontSize + 2 * TEXT_PADDING);
+
+    const θ = length / r; // θ / 2π = length / 2πr
+    const angleAt = Math.atan2(at.y - O.y, at.x - O.x);
+    const [from, to] = [θ / 2, -θ / 2].map(angle => O.translate(Vector.fromAngle(angleAt + angle).resize(r)));
+    const [from2, to2] = [from, to].map(point => point.translate(Vector.fromPoints(O, point).resize(height)));
+
+    const [λr, λr2] = [this.λ(r), this.λ(r + height)];
+    const clip = `M${this.coords(from)}
+      A${λr},${λr} 0 ${+(θ > Math.PI)} ${+true} ${this.coords(to)}
+      L${this.coords(to2)}
+      A${λr2},${λr2} 0 ${+(θ > Math.PI)} ${+false} ${this.coords(from2)}
+      L${this.coords(from)}z`;
+
+    return textPathAttrs(
+      this.circlePath(circle, above, Vector.fromPoints(O, at).angle),
+      clip,
+      above,
+    );
+  }
+
+  /**
+   * Compiles `textPath` for text linked to a single point.
+   *
+   * Always has the text splayed id in a wide arc, slightly above the supplied `at` point.
+   */
+  private pointTextPath(at: Point, { fontSize, textLength }: { fontSize: number, textLength: number }): TextPathAttrs {
+    return this.circleTextPath(
+      new Circle(at.translate(new Vector(0, -this.λ.invert(70))), this.λ.invert(80)),
+      at.translate(new Vector(0, 1)), // always upward
+      { fontSize, textLength },
+    );
   }
 
 }

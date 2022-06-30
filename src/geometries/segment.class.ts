@@ -1,8 +1,11 @@
 import { minBy } from '../utils/arrays';
 
-import { ClosestPoint, Geometry, Line, Point, Vector } from './module';
+import { Line } from './line.class';
+import { type ClosestPoint, type Geometry } from './module';
+import { Point } from './point.class';
+import { Vector } from './vector.class';
 
-export default class Segment extends Line implements Geometry {
+export class Segment extends Line implements Geometry {
 
   constructor(public readonly from: Point, public readonly to: Point) {
     super(Vector.fromPoints(from, to), from);
@@ -15,6 +18,10 @@ export default class Segment extends Line implements Geometry {
   public get midpoint(): Point {
     const [{ x, y }, { x: x2, y: y2 }] = [this.from, this.to];
     return new Point((x + x2) / 2, (y + y2) / 2);
+  }
+
+  public extend(): Line {
+    return Line.fromPoints(this.from, this.to);
   }
 
   public bisector(): Line {

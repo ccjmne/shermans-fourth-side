@@ -1,30 +1,39 @@
+import { easeBackOut, easeCircleOut } from 'd3-ease';
 import { select, selectAll, Selection } from 'd3-selection';
 import 'd3-selection-multi';
-import { BehaviorSubject, combineLatest, debounceTime, distinctUntilChanged, EMPTY, endWith, exhaustMap, filter, fromEvent, map, mapTo, merge, Observable, ReplaySubject, startWith, Subject, switchMap, takeUntil, tap, withLatestFrom } from 'rxjs';
+import { animationFrameScheduler, BehaviorSubject, combineLatest, concatAll, debounceTime, distinctUntilChanged, EMPTY, endWith, exhaustMap, filter, fromEvent, map, merge, ReplaySubject, scheduled, Subject, switchMap, takeUntil, tap, withLatestFrom } from 'rxjs';
 
 import { Angle, Circle, Line, Point, Segment } from '../geometries/module';
-import Shapes, { ShapesCompiler, ShapeType, ShapeVertex } from '../shapes/module';
-import { BisectorShape, Mark, SideShape } from '../shapes/shape.class'; // TODO: import from ../shapes/module
-import { minBy, pairs, triads } from '../utils/arrays';
-import { Maybe } from '../utils/maybe';
+import { angle, angularBisector, bisector, circle, identify, isVertex, line, Mark, point, ShapesCompiler, side, vertex, type Shape, type ShapeVertex } from '../shapes/module';
+
+import { maxBy, minBy, pairs, triads } from '../utils/arrays';
+import { isNil, type Maybe } from '../utils/maybe';
+import onResize from '../utils/on-resize';
 import RxElement from '../utils/rx-element.class';
-import { definePath } from '../utils/svg-defs';
+import { defineClip, definePath } from '../utils/svg-defs';
+
+import template from './virtual-chalkboard.html';
 
 class VirtualChalkboard extends RxElement {
 
   private svg!: SVGSVGElement;
-  private Ω!: Selection<SVGGElement, unknown, HTMLElement, unknown>;
+  private Ω!: Selection<SVGGElement, unknown, null, unknown>;
+  private bg!: Selection<SVGGElement, unknown, null, unknown>;
+  private fg!: Selection<SVGGElement, unknown, null, unknown>;
+  private measurer!: SVGTextElement;
   private readonly vertices$: BehaviorSubject<ShapeVertex[]>;
 
   constructor() {
     super();
     this.vertices$ = new BehaviorSubject([
-      Shapes.vertex(new Point(0, 0), 'A'),
-      Shapes.vertex(new Point(.5, 0), 'B'),
-      Shapes.vertex(new Point(.5, .5), 'C'),
+      vertex(new Point(-.5, 0), { name: 'Vertex A', aka: 'A' }),
+      vertex(new Point(.5, 0), { name: 'Vertex B', aka: 'B' }),
+      vertex(new Point(.5, .5), { name: 'Vertex C', aka: 'C' }),
     ]);
-    // this.vertices$ = new BehaviorSubject(Array.from({ length: 3 },
-    //   () => new Point(Math.random() * 2 - 1, Math.random() * 2 - 1)).map((d, i) => Shapes.vertex(d, 'ABC'[i])));
+    // this.vertices$ = new BehaviorSubject(Array.from(
+    //   { length: 3 },
+    //   () => new Point(Math.random() * 2 - 1, Math.random() * 2 - 1),
+    // ).map((d, i) => vertex(d).with({ name: `Vertex ${'ABC'[i]}`, aka: 'ABC'[i] })));
   }
 
   public connectedCallback(): void {
@@ -32,42 +41,45 @@ class VirtualChalkboard extends RxElement {
       return;
     }
 
-    this.innerHTML = require('./virtual-chalkboard.html');
+    this.innerHTML = template;
     this.style.display = 'grid';
     this.style.placeItems = 'stretch';
 
     this.svg = this.querySelector('svg') as SVGSVGElement; // can't be `null` there, innerHTML was attached and compiled
-    this.Ω = select('g.origin');
+    this.Ω = select(this.svg).select('g.origin');
+    this.bg = this.Ω.select('g.background');
+    this.fg = this.Ω.select('g.foreground');
 
-    const shapes$: Subject<ShapeType[]> = new ReplaySubject(1);
+    this.measurer = this.svg.querySelector('defs text#measurer') as SVGTextElement;
+
+    const shapes$: Subject<Shape[]> = new ReplaySubject(1);
     const mouse$: Subject<Point> = new Subject();
-    const compiler$: Subject<ShapesCompiler> = new Subject();
+    const compiler$: Subject<ShapesCompiler> = new ReplaySubject(1);
 
-    const hovered$ = new Subject<Maybe<ShapeType>>();
+    const hovered$ = new Subject<Maybe<Shape>>();
     const dragging$ = new BehaviorSubject<boolean>(false);
 
-    const highlight = { text: this.Ω.select('text#hovered'), textPath: definePath().in(this.svg) };
-    highlight.text.append('textPath').attrs({ startOffset: '50%', href: highlight.textPath.href });
+    const highlight = {
+      text: this.fg.select<SVGTextElement>('text#hovered'),
+      path: definePath().in(this.svg),
+      clip: defineClip().in(this.svg),
+      background: this.fg.select<SVGPathElement>('path#hovered-background'),
+    };
+    highlight.text.attr('clip-path', `url(${highlight.clip.href})`);
+    highlight.text.append('textPath').attrs({ startOffset: '50%', href: highlight.path.href });
 
-    (function onResize(elem: Element): Observable<DOMRect> {
-      return new Observable<DOMRect>(subscriber => {
-        const observer = new ResizeObserver(
-          e => e.filter(({ target }) => target === elem).forEach(({ contentRect }) => subscriber.next(contentRect)),
-        );
-
-        observer.observe(elem);
-        return () => observer.unobserve(elem);
-      }).pipe(
-        startWith(elem.getBoundingClientRect()),
-      );
-    }(this)).pipe(
+    onResize(this).pipe(
       debounceTime(100),
       map(rect => new ShapesCompiler(rect)),
       tap(({ Ω: { x, y } }) => this.Ω.transition().attr('transform', `translate(${x},${y})`)),
       takeUntil(super.disconnected),
     ).subscribe(compiler$);
 
-    merge(fromEvent<MouseEvent>(this.svg, 'mousemove'), fromEvent<MouseEvent>(this.svg, 'touchmove', { passive: true })).pipe(
+    scheduled(
+      [fromEvent<MouseEvent>(this.svg, 'mousemove'), fromEvent<MouseEvent>(this.svg, 'touchmove', { passive: true })],
+      animationFrameScheduler,
+    ).pipe(
+      concatAll(),
       withLatestFrom(compiler$),
       map(([mouse, compiler]) => compiler.toLocalCoords(mouse)),
       takeUntil(super.disconnected),
@@ -75,26 +87,58 @@ class VirtualChalkboard extends RxElement {
 
     this.vertices$.pipe(
       map(vertices => {
-        const sides = pairs(vertices).map(([A, B]) => new SideShape(
-          new Segment(A.geometry, B.geometry),
-          `${A.name}${B.name}`,
-        ));
-        const perpBisectors = sides.map(side => new BisectorShape(side));
-        const sideLines = sides.map(s => Shapes.line(new Line(s.geometry.vector, s.geometry.from), `${s.name} (extended)`));
-        const angles = triads(vertices).map(([A, B, C]) => Shapes.angle(new Angle(A.geometry, B.geometry, C.geometry), `angle ${A.name}${B.name}${C.name}`));
-        const angularBisectors = angles.map(θ => Shapes.line(θ.geometry.bisector(), `bisector of ${θ.name}`));
-        const external = angles.map(θ => Shapes.line(θ.geometry.bisector(true), `external bisector of ${θ.name}`));
-        if (angles.some(θ => θ.geometry.isNearlyStraight())) {
-          return [...sideLines, ...perpBisectors, ...angularBisectors, ...external, ...angles, ...sides, ...vertices];
+        const sides = pairs(vertices).map(([A, B]) => side(A, B));
+        const bisects = sides.map(bisector);
+        const angles = triads(vertices).map(([A, B, C]) => angle(new Angle(A.geometry, B.geometry, C.geometry), {
+          name: `Angle ${A.aka}${B.aka}${C.aka}`,
+          aka: `angle ${A.aka}${B.aka}${C.aka}`,
+          parents: sides.filter(({ geometry: { from, to } }) => [from, to].includes(B.geometry)),
+        }));
+
+        const ngBisects = angles.map(angularBisector);
+        const extNgBisects = angles.map(θ => line(θ.geometry.bisector(true), { name: `External bisector of ${θ.aka}` }));
+        const extSides = sides.map(s => line(s.geometry.extend(), { name: `${s.name} (extended)`, parents: [s] }));
+
+        const circles = <Shape[]>[];
+        const largest = maxBy(angles, ({ geometry: θ }) => Math.abs(θ.angle)).geometry;
+        const enclCtr = new Segment(largest.A, largest.C).midpoint;
+        const enclosing = circle(new Circle(enclCtr, enclCtr.distanceFrom(largest.A)), {
+          name: 'Smallest circle enclosing ABC',
+          parents: sides,
+          marks: [new Mark('x', enclCtr, 0)],
+        });
+
+        if (largest.isNearlyStraight()) {
+          // If the triangle is flat, only the smallest enclosing circle exists
+          circles.push(enclosing);
+        } else {
+          const [
+            [{ geometry: A }],
+            [{ geometry: AB }],
+            [{ geometry: bisect1 }, { geometry: bisect2 }],
+            [{ geometry: ngBisect1 }, { geometry: ngBisect2 }],
+          ] = [vertices, sides, bisects, ngBisects];
+
+          const [circumCtr, inCtr] = [bisect1.intersectWith(bisect2)!, ngBisect1.intersectWith(ngBisect2)!]; // these intersections can't be `null`, by geometric definition
+          circles.push(
+            largest.isObtuse() ? enclosing : enclosing.using(new Circle(circumCtr, circumCtr.distanceFrom(A))),
+            ...pairs(extNgBisects)
+              .map(([{ geometry: l1 }, { geometry: l2 }]) => l1.intersectWith(l2)!)
+              .flatMap((ctr, i) => [
+                point(ctr, { name: 'Excentre' }),
+                circle(new Circle(ctr, sides[i].geometry.closestPointTo(ctr).distance), {
+                  name: `Excircle to ${sides[i].aka}`,
+                  parents: [sides[i], ...extSides.filter(s => !s.parents.includes(sides[i]))],
+                }),
+              ]),
+            circle(new Circle(circumCtr, circumCtr.distanceFrom(A)), { name: 'Circumcircle of ABC', parents: sides }),
+            circle(new Circle(inCtr, inCtr.distanceFrom(inCtr.projectOnto(AB))), { name: 'Incircle of ABC', parents: sides }),
+            point(circumCtr, { name: 'Cirumcentre', parents: bisects, marks: bisects.flatMap(({ marks }) => marks) }),
+            point(inCtr, { name: 'Incentre', parents: ngBisects, marks: ngBisects.flatMap(({ marks }) => marks) }),
+          );
         }
 
-        const excircles = pairs(external).map(([{ geometry: l1 }, { geometry: l2 }]) => l1.intersectWith(l2) as Point).map((O, i) => Shapes.circle(new Circle(O, sides[i].geometry.closestPointTo(O).distance), `excircle to ${sides[i].name}`));
-        const [[{ geometry: A }], [{ geometry: AB }], [{ geometry: l1 }, { geometry: l2 }], [{ geometry: l3 }, { geometry: l4 }]] = [vertices, sides, perpBisectors, angularBisectors];
-        const [circumcenter, incenter] = [l1.intersectWith(l2) as Point, l3.intersectWith(l4) as Point]; // these intersections can't be `null`, by geometric definition
-        const circumcircle = Shapes.circle(new Circle(circumcenter, circumcenter.distanceFrom(A)), 'circumcircle of ABC');
-        const incircle = Shapes.circle(new Circle(incenter, incenter.distanceFrom(incenter.projectOnto(AB))), 'incircle of ABC');
-
-        return [...sideLines, ...perpBisectors, ...angularBisectors, circumcircle, incircle, ...external, ...excircles, ...angles, ...sides, ...vertices];
+        return [...extSides, ...bisects, ...ngBisects, ...circles.reverse(), ...extNgBisects, ...angles, ...sides, ...vertices];
       }),
       takeUntil(super.disconnected),
     ).subscribe(shapes$);
@@ -103,9 +147,10 @@ class VirtualChalkboard extends RxElement {
       switchMap(dragging => (dragging ? EMPTY : mouse$)),
       withLatestFrom(shapes$, compiler$),
       map(([mouse, shapes, { distanceThreshold }]) => minBy(
-        shapes.map(shape => ({ shape, closest: shape.geometry.closestPointTo(mouse) }))
+        shapes
+          .map(shape => ({ shape, closest: shape.geometry.closestPointTo(mouse) }))
           .filter(({ closest }) => closest.distance < distanceThreshold),
-        ({ shape, closest: { distance } }) => Shapes.priority(shape) + distance,
+        ({ shape: { priority }, closest: { distance } }) => priority + distance,
       )?.shape),
       distinctUntilChanged(),
       takeUntil(super.disconnected),
@@ -115,10 +160,43 @@ class VirtualChalkboard extends RxElement {
       tap(e => e.preventDefault()),
       withLatestFrom(hovered$),
       map(([, hovered]) => hovered),
-      filter(Shapes.isVertex),
-      exhaustMap(vertex => mouse$.pipe(
-        tap(at => this.reposition(vertex, at)),
-        mapTo(true),
+      filter(isVertex),
+      withLatestFrom(this.vertices$, compiler$),
+      map(([vert, vertices, { distanceThreshold }]) => {
+        const [{ geometry: A }, { geometry: B }] = vertices.filter(({ name }) => vert.name !== name);
+        const { length, midpoint, vector: { perpendicular: perp } } = new Segment(A, B);
+
+        return {
+          vert,
+          distanceThreshold,
+          snaps: ([] as Shape[]).concat(
+            line(Line.fromPoints(A, B), { name: 'Flat triangle' }),
+            line(new Line(perp, A), { name: 'Right-angle triangle' }),
+            line(new Line(perp, B), { name: 'Right-angle triangle' }),
+            line(new Line(perp, midpoint), { name: 'Isoceles triangle' }),
+            circle(new Circle(midpoint, length / 2), { name: 'Right-angle triangle' }),
+            circle(new Circle(A, length), { name: 'Isoceles triangle' }),
+            circle(new Circle(B, length), { name: 'Isoceles triangle' }),
+            new Circle(A, length).intersectWith(new Line(perp, midpoint))
+              .map(p => point(p, { name: 'Equirectangular triangle' })),
+            new Circle(midpoint, length / 2).intersectWith(new Line(perp, midpoint))
+              .map(p => point(p, { name: 'Isoceles right-angle triangle' })),
+            ...[A, B].map(v => new Circle(v, length).intersectWith(new Line(perp, v))
+              .map(p => point(p, { name: 'Isoceles right-angle triangle' }))),
+          ),
+        };
+      }),
+      exhaustMap(({ vert, snaps, distanceThreshold }) => mouse$.pipe(
+        // TODO: replace hard-coded boolean with snap-mode toggle
+        // eslint-disable-next-line no-constant-condition
+        map(at => (true ? at : minBy(
+          snaps
+            .map(snap => ({ snap, closest: snap.geometry.closestPointTo(at) }))
+            .filter(({ closest }) => closest.distance < distanceThreshold),
+          ({ snap: { priority }, closest: { distance } }) => priority + distance,
+        )?.closest || at)),
+        tap(at => this.reposition(vert, at)),
+        map(() => true),
         takeUntil(merge(fromEvent(this.svg, 'mouseup'), fromEvent(this.svg, 'touchend'))),
         endWith(false),
       )),
@@ -137,39 +215,100 @@ class VirtualChalkboard extends RxElement {
     ).subscribe(([compiler, [vertices, shapes]]) => this.redraw(vertices, shapes, compiler, true));
 
     combineLatest([hovered$, mouse$, compiler$]).pipe(
+      map(([shape, mouse, compiler]) => {
+        if (isNil(shape)) {
+          return { text: '', from: 0, to: 0 };
+        }
+
+        const measurements = this.measure(shape.name, (highlight.text.node() as SVGTextElement).computedStyleMap());
+        const to = compiler.getTextPathAttrs(shape, mouse, measurements).dy;
+        return { text: shape.name, from: measurements.fontSize * Math.sign(-to), to };
+      }),
+      distinctUntilChanged(({ text, from, to }, other) => text === other.text && from === other.from && to === other.to),
+    ).subscribe(({ text, from, to }) => {
+      const totalDuration = 750;
+      const duration = 300;
+      const stagger = (totalDuration - duration) / text.length;
+      highlight.background.transition().duration(totalDuration - duration).ease(easeCircleOut).styleTween('opacity', () => String);
+      highlight.text.transition().duration(totalDuration).ease(easeCircleOut).attrTween('dy', () => T => Array.from({ length: text.length })
+        // offset, scale, clamp and ease time reference for animation of each glyph
+        .map((_, i) => T - (stagger / totalDuration) * i)
+        .map(t => t / (duration / totalDuration))
+        .map(t => Math.max(0, Math.min(1, t)))
+        .map(easeBackOut)
+
+        .map(t => from + t * (to - from))
+
+        // transform absolute positions into sequential relative offsets
+        .reduce((offsets, abs, i, arr) => [...offsets, abs - (arr[i - 1] ?? 0)], <number[]>[])
+        .join(' '));
+    });
+
+    combineLatest([hovered$, mouse$, compiler$]).pipe(
       takeUntil(super.disconnected),
     ).subscribe(([shape, mouse, compiler]) => {
-      this.Ω.selectAll('path').classed('hovered', false);
+      this.bg.selectAll('path').classed('hovered', false).classed('parent', false);
+
       if (shape) {
-        highlight.text.select('textPath').text(shape.name);
-        highlight.text.attrs(compiler.getTextPathAttrs(shape, mouse));
-        highlight.textPath.elem.attrs(compiler.getTextPathAttrs(shape, mouse));
-        selectAll([shape, ...shape.linked].map(({ name }) => this.svg.querySelector(`path[name='${name}']`))).raise().classed('hovered', true);
-        this.Ω.select('g.marks').selectAll<SVGUseElement, Mark>('use').data(shape.marks).join(
+        const {
+          clip, d, ...attrs
+        } = compiler.getTextPathAttrs(shape, mouse, this.measure(shape.name, highlight.text.node()!.computedStyleMap()));
+
+        highlight.text.attrs({ ...attrs }).select('textPath').text(shape.name);
+        highlight.path.elem.attr('d', d);
+        highlight.clip.elem.select('path').attr('d', clip);
+        highlight.background.attr('d', clip);
+        selectAll(shape.parents.map(({ name }) => this.svg.querySelector(`path[name='${name}']`))).raise().classed('parent', true);
+        select(this.svg.querySelector(`path[name='${shape.name}']`)).raise().classed('hovered', true);
+        this.bg.select('g.marks').selectAll<SVGUseElement, Mark>('use').data(shape.marks).join(
           enter => enter.append('use').attrs(mark => compiler.getMarkAttrs(mark)),
           update => update.attrs(mark => compiler.getMarkAttrs(mark)),
         );
       } else {
-        highlight.text.select('textPath').text('');
-        this.Ω.select('g.marks').selectAll('use').data([]).join(enter => enter, update => update);
+        highlight.text.select('textPath').text('').attr('dy', '9999');
+        highlight.background.attr('d', null);
+        this.bg.select('g.marks').selectAll('use').data([]).join(enter => enter, update => update);
       }
     });
   }
 
   private reposition(hovered: ShapeVertex, at: Point): void {
-    this.vertices$.next(this.vertices$.getValue().map(v => (v.name === hovered.name ? hovered.reshape(at) : v)));
+    this.vertices$.next(this.vertices$.getValue().map(v => (v.name === hovered.name ? hovered.using(at) : v)));
   }
 
-  private redraw(vertices: ShapeType[], shapes: ShapeType[], compiler: ShapesCompiler, smooth = false): void {
-    this.Ω.select('g.shapes').selectAll<SVGPathElement, ShapeType>('path').data(shapes.filter(shape => !Shapes.isVertex(shape)), Shapes.identify).join(
-      enter => enter.append('path').attrs(s => compiler.getPathAttrs(s)),
-      update => update.call(u => (smooth ? u.transition() : u).attrs(s => compiler.getPathAttrs(s))),
-    );
+  private redraw(vertices: ShapeVertex[], shapes: Shape[], compiler: ShapesCompiler, smooth = false): void {
+    this.bg.select('g.shapes').selectAll<SVGPathElement, Shape>('path')
+      .data(shapes.filter(shape => !(shape.geometry instanceof Point)), identify).join(
+        enter => enter.append('path').attrs(s => compiler.getPathAttrs(s)),
+        update => update.call(u => (smooth ? u.transition() : u).attrs(s => compiler.getPathAttrs(s))),
+      );
 
-    this.Ω.select('g.vertices').selectAll<SVGPathElement, ShapeType>('path').data(vertices, Shapes.identify).join(
-      enter => enter.append('path').attrs(s => compiler.getPathAttrs(s)),
-      update => update.call(u => (smooth ? u.transition() : u).attrs(s => compiler.getPathAttrs(s))),
-    );
+    this.bg.select('g.points').selectAll<SVGPathElement, Shape>('path')
+      .data(shapes.filter(shape => shape.geometry instanceof Point), identify).join(
+        enter => enter.append('path').attrs(s => compiler.getPathAttrs(s)),
+        update => update.call(u => (smooth ? u.transition() : u).attrs(s => compiler.getPathAttrs(s))),
+      );
+
+    // this.bg.select('g.vertices').selectAll<SVGPathElement, Shape>('use')
+    //   .data(vertices, identify).join(
+    //     enter => enter.append('use')
+    //       .attrs(s => ({ href: `#vertex-${s.name.toLowerCase()}` }))
+    //       .attr('transform', ({ geometry: p }) => `translate(${compiler.coords(p)})`),
+    //     update => update.call(u => (smooth ? u.transition() : u).attrs(s => compiler.getPathAttrs(s)).attr('transform', ({ geometry: g }) => `translate(${compiler.coords(g)})`)),
+    //   );
+  }
+
+  private measure(text: string, styles: StylePropertyMapReadOnly): { textLength: number, fontSize: number } {
+    select(this.measurer)
+      .style('font-size', String(styles.get('font-size') || ''))
+      .style('letter-spacing', String(styles.get('letter-spacing') || ''))
+      .text(text);
+
+    const { value: spacing } = styles.get('letter-spacing') as CSSKeywordValue | CSSUnitValue;
+    return {
+      textLength: this.measurer.getComputedTextLength() + Math.max(0, text.length - 1) * (spacing === 'normal' ? 0 : +spacing),
+      fontSize: (styles.get('font-size') as CSSUnitValue).value,
+    };
   }
 
 }

@@ -25,11 +25,13 @@ export function defineHatch(stroke = 'grey', side = 4): {
         .attr('height', side);
       pattern.append('path')
         .attr('stroke', stroke)
-        .attr('d',
+        .attr(
+          'd',
           `M-1,1 l2,-2
            M0,${side} l${side},-${side}
            M${side},${side}
-           m-1,1 l2,-2`);
+           m-1,1 l2,-2`,
+        );
 
       return { href: `#${id}`, elem: pattern };
     },

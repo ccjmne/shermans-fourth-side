@@ -1,3 +1,5 @@
+$background: hsl(223deg 14% 10%);
+
 html,
 body {
   height: 100%;
@@ -6,17 +8,25 @@ body {
 
 body {
   display: grid;
-  background-color: hsl(223deg 14% 10%);
+  background-color: $background;
   font-family: sans-serif;
   place-items: stretch;
 }
 
 svg {
   defs .mark {
-    shape-rendering: crisp;
+    shape-rendering: geometricPrecision;
     stroke: white;
+    stroke-dasharray: none;
     stroke-width: 1.5;
   }
+
+  #hovered-background {
+    fill: $background;
+    filter: blur(5px);
+    stroke: none;
+  }
+
   text {
     fill: ghostwhite;
     letter-spacing: 0.1em;
@@ -24,8 +34,13 @@ svg {
     text-anchor: middle;
   }
 
-  .hovered {
-    stroke: crimson !important;
+  .hovered:not(.point) {
+    stroke: crimson;
+    stroke-width: 2;
+  }
+
+  .parent {
+    stroke: chocolate !important;
     stroke-width: 2;
   }
 
@@ -33,15 +48,18 @@ svg {
     fill: none;
     stroke: #555;
     stroke-dasharray: 10 3;
+    
+    &.vertex, &.point {
+      stroke: white;
+      stroke-dasharray: none;
+    }
 
     &.vertex {
-      cursor: move;
-      fill: white;
-      mix-blend-mode: overlay;
+      stroke-width: 2;
     }
 
     &.side {
-      stroke: orange;
+      stroke: ghostwhite;
       stroke-dasharray: none;
       stroke-width: 2;
     }

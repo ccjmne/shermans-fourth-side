@@ -1,6 +1,6 @@
-import { Point } from './module';
+import { type Point } from './point.class';
 
-export default class Vector {
+export class Vector {
 
   public readonly slope: number;
 
@@ -16,6 +16,10 @@ export default class Vector {
     return new Vector(Math.cos(θ), Math.sin(θ));
   }
 
+  public get magnitude(): number {
+    return Math.sqrt(this.Δx ** 2 + this.Δy ** 2);
+  }
+
   public get perpendicular(): Vector {
     return new Vector(this.Δy, -this.Δx);
   }
@@ -24,9 +28,9 @@ export default class Vector {
     return Math.atan2(this.Δy, this.Δx);
   }
 
-  public magnitude(m: number): Vector {
-    const λ = Math.sqrt(this.Δx ** 2 + this.Δy ** 2) / m;
-    return new Vector(this.Δx / λ, this.Δy / λ);
+  public resize(m: number): Vector {
+    const λ = m / this.magnitude;
+    return new Vector(this.Δx * λ, this.Δy * λ);
   }
 
   public dot({ Δx, Δy }: Vector): number {

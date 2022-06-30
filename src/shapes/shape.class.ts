@@ -1,69 +1,117 @@
-/* eslint-disable max-classes-per-file */
+import { Angle, Segment, type Circle, type Geometry, type Line, type Point } from '../geometries/module';
+import { type Maybe } from '../utils/maybe';
 
-import { Geometry, Line, Point, Segment } from '../geometries/module';
+import { Mark } from './mark.class';
 
-import { ShapeType, ShapeTypeOption } from './module';
+export enum ShapeType { VERTEX = 'vertex', POINT = 'point', SIDE = 'side', LINE = 'line', CIRCLE = 'circle', ANGLE = 'angle' }
+export type Priority = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+type ShapeAttrs = { name: string, aka?: string, parents?: Shape[], marks?: Mark[] };
 
-// TODO: NO MORE THAN ONE CLASS PER FILE!!! or maybe not really, depending on how large these get 🤔
+export type ShapeVertex = ShapeImpl<ShapeType.VERTEX, Point>;
+export type ShapeSide = ShapeImpl<ShapeType.SIDE, Segment>;
+export type ShapeLine = ShapeImpl<ShapeType.LINE, Line>;
+export type ShapeCircle = ShapeImpl<ShapeType.CIRCLE, Circle>;
+export type ShapeAngle = ShapeImpl<ShapeType.ANGLE, Angle>;
 
-/**
- * the `Mark`s have a `kind` that will refer to a `path` SVG Element in `defs` to be linked to through `<use href=...>`
- *
- * Please note it's `href=`, and not `xlink:href`. See https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/xlink:href
- *
- * `xlink:href` is both deprecated and obsoleted... as soon™ as SVG2 comes out.
- */
-export class Mark {
+export type Shape = ShapeVertex | ShapeSide | ShapeLine | ShapeCircle | ShapeAngle | ShapeImpl<ShapeType.POINT, Point>;
 
-  public constructor(
-    public readonly kind: 'tick' | 'angle',
-    public readonly at: Point,
-    public readonly rotate: number,
-  ) {}
+class ShapeImpl<T extends ShapeType, G extends Geometry> {
 
-}
+  public readonly priority: Priority;
 
-export default class Shape<T extends ShapeTypeOption, S extends Geometry> {
+  private static readonly PRIORITIES: { [key in ShapeType]?: Priority } = {
+    [ShapeType.VERTEX]: 0,
+    [ShapeType.POINT]: 0,
+    [ShapeType.SIDE]: 1,
+  };
 
-    public readonly linked: ShapeType[] = [];
-    public readonly marks: Mark[] = [];
+  constructor(
+    public readonly type: T,
+    public readonly geometry: G,
+    public readonly name: string,
+    public readonly aka: string,
+    public readonly parents: Shape[] = [],
+    public readonly marks: Mark[] = [],
+  ) {
+    this.priority = ShapeImpl.PRIORITIES[type] ?? 9;
+  }
 
-    constructor(
-          public readonly type: T,
-          public readonly geometry: S,
-          public readonly name: string,
-    ) {}
-
-    public reshape(geometry: S): Shape<T, S> {
-      return new Shape(this.type, geometry, this.name);
-    }
-
-    public link(...shapes: ShapeType[]): void {
-      this.linked.push(...shapes);
-    }
-
-}
-
-export class SideShape extends Shape<ShapeTypeOption.SIDE, Segment> {
-
-  constructor(geometry: Segment, name: string) {
-    super(ShapeTypeOption.SIDE, geometry, name);
+  public using(geometry: G): ShapeImpl<T, G> {
+    return new ShapeImpl(this.type, geometry, this.name, this.aka, this.parents, this.marks);
   }
 
 }
 
-export class BisectorShape extends Shape<ShapeTypeOption.LINE, Line> {
+export function identify({ name }: Shape): string {
+  return name;
+}
 
-  constructor(side: SideShape) {
-    super(ShapeTypeOption.LINE, side.geometry.bisector(), `Perpendicular bisector of ${side.name}`);
-    this.link(side);
+export function isVertex(s: Maybe<Shape>): s is ShapeVertex {
+  return s?.type === ShapeType.VERTEX;
+}
 
-    const { from, midpoint, to } = side.geometry;
+function shape<T extends ShapeType, G extends Geometry>(
+  type: T,
+  geometry: G,
+  { name, aka, parents, marks }: ShapeAttrs,
+): ShapeImpl<T, G> {
+  return new ShapeImpl(type, geometry, name, aka ?? name, parents, marks);
+}
 
-    this.marks.push(
-      new Mark('tick', new Segment(from, midpoint).midpoint, -side.geometry.vector.angle),
-      new Mark('tick', new Segment(midpoint, to).midpoint, -side.geometry.vector.angle),
-    );
-  }
+export function vertex(geometry: Point, attrs: ShapeAttrs): ShapeVertex {
+  return shape(ShapeType.VERTEX, geometry, attrs);
+}
 
+export function point(geometry: Point, attrs: ShapeAttrs): Shape {
+  return shape(ShapeType.POINT, geometry, attrs);
+}
+
+export function side(from: ShapeVertex, to: ShapeVertex): ShapeSide {
+  return shape(ShapeType.SIDE, new Segment(from.geometry, to.geometry), {
+    name: `Side ${from.aka}${to.aka}`,
+    aka: `${from.aka}${to.aka}`,
+    parents: [from, to],
+  });
+}
+
+export function line(geometry: Line, attrs: ShapeAttrs): ShapeLine {
+  return shape(ShapeType.LINE, geometry, attrs);
+}
+
+export function circle(geometry: Circle, attrs: ShapeAttrs): ShapeCircle {
+  return shape(ShapeType.CIRCLE, geometry, attrs);
+}
+
+export function angle(geometry: Angle, attrs: ShapeAttrs): ShapeAngle {
+  return shape(ShapeType.ANGLE, geometry, attrs);
+}
+
+export function bisector(of: ShapeSide): ShapeLine {
+  const { from, midpoint, to, vector: { angle: θ } } = of.geometry;
+
+  return shape(ShapeType.LINE, of.geometry.bisector(), {
+    name: `Perpendicular bisector of ${of.aka}`,
+    parents: [of],
+    marks: [
+      new Mark('tick-double', new Segment(from, midpoint).midpoint, θ),
+      new Mark('tick-double', new Segment(midpoint, to).midpoint, θ),
+      new Mark('right-angle', midpoint, θ),
+    ],
+  });
+}
+
+export function angularBisector(of: ShapeAngle): ShapeLine {
+  const { geometry: { A, B, C }, parents } = of;
+  const bisect = of.geometry.bisector();
+
+  return shape(ShapeType.LINE, bisect, {
+    name: `Bisector of ${of.aka}`,
+    parents: [of, ...parents],
+    marks: of.geometry.isNearlyRight() ? [
+      new Mark('right-angle-tick', B, bisect.vector.angle),
+    ] : [
+      new Mark('angle-tick', B, new Angle(A, B, B.translate(bisect.vector)).bisector().vector.angle - Math.PI / 2),
+      new Mark('angle-tick', B, new Angle(B.translate(bisect.vector), B, C).bisector().vector.angle - Math.PI / 2),
+    ],
+  });
 }

@@ -1,8 +1,14 @@
-import { ClosestPoint, Geometry, Line } from './module';
+import { type Line } from './line.class';
+import { type ClosestPoint, type Geometry } from './module';
+import { Vector } from './vector.class';
 
-export default class Point implements Geometry {
+export class Point implements Geometry {
 
   constructor(public readonly x: number, public readonly y: number) {}
+
+  public translate({ Δx, Δy }: Vector): Point {
+    return new Point(this.x + Δx, this.y + Δy);
+  }
 
   public distanceFrom({ x, y }: Point): number {
     return Math.sqrt((x - this.x) ** 2 + (y - this.y) ** 2);
@@ -13,7 +19,7 @@ export default class Point implements Geometry {
   }
 
   public projectOnto(line: Line): Point {
-    return line.intersectWith(new Line(line.vector.perpendicular, this)) as Point; // always intersects, by geometric definition
+    return line.project(this);
   }
 
 }
