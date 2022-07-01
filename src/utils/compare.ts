@@ -8,3 +8,7 @@ export const εθ = Math.PI / 180; // 1 degree
 export function isNearly(a: number, b: number, ε: number = ε0): boolean {
   return (Δ => Δ <= ε && Δ >= 0)(Math.abs(a - b));
 }
+
+export function equals<A extends object, B extends object>(a: A, b: B): boolean {
+  return Object.keys(a).length === Object.keys(b).length && Object.entries(a).every(([k, v]) => b[k] === v);
+}

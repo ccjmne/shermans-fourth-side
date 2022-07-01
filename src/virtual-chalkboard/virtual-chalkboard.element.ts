@@ -1,14 +1,14 @@
 import { easeBackOut, easeCircleOut } from 'd3-ease';
 import { select, selectAll, Selection } from 'd3-selection';
 import 'd3-selection-multi';
-import { animationFrameScheduler, BehaviorSubject, combineLatest, concatAll, debounceTime, distinctUntilChanged, EMPTY, endWith, exhaustMap, filter, fromEvent, map, merge, ReplaySubject, scheduled, Subject, switchMap, takeUntil, tap, withLatestFrom } from 'rxjs';
+import { BehaviorSubject, combineLatest, combineLatestWith, debounceTime, distinctUntilChanged, EMPTY, endWith, exhaustMap, filter, fromEvent, map, merge, ReplaySubject, Subject, switchMap, takeUntil, tap, withLatestFrom } from 'rxjs';
 
 import { equals } from 'utils/compare';
 
 import { Angle, Circle, Line, Point, Segment } from '../geometries/module';
 import { angle, angularBisector, bisector, circle, identify, isVertex, line, Mark, point, ShapesCompiler, side, vertex, type Shape, type ShapeVertex } from '../shapes/module';
 import { maxBy, minBy, pairs, triads } from '../utils/arrays';
-import { isNil, type Maybe } from '../utils/maybe';
+import { isNil, isNotNil, type Maybe } from '../utils/maybe';
 import onResize from '../utils/on-resize';
 import RxElement from '../utils/rx-element.class';
 import { defineClip, definePath } from '../utils/svg-defs';
@@ -76,11 +76,7 @@ class VirtualChalkboard extends RxElement {
       takeUntil(super.disconnected),
     ).subscribe(compiler$);
 
-    scheduled(
-      [fromEvent<MouseEvent>(this.svg, 'mousemove'), fromEvent<MouseEvent>(this.svg, 'touchmove', { passive: true })],
-      animationFrameScheduler,
-    ).pipe(
-      concatAll(),
+    merge(fromEvent<MouseEvent>(this.svg, 'mousemove'), fromEvent<MouseEvent>(this.svg, 'touchmove', { passive: true })).pipe(
       withLatestFrom(compiler$),
       map(([mouse, compiler]) => compiler.toLocalCoords(mouse)),
       takeUntil(super.disconnected),
@@ -216,61 +212,51 @@ class VirtualChalkboard extends RxElement {
       takeUntil(super.disconnected),
     ).subscribe(([compiler, [vertices, shapes]]) => this.redraw(vertices, shapes, compiler, true));
 
-    combineLatest([hovered$, mouse$, compiler$]).pipe(
-      map(([shape, mouse, compiler]) => {
-        if (isNil(shape)) {
-          return { text: '', from: 0, to: 0 };
+    hovered$.pipe(
+      withLatestFrom(hovered$.pipe(filter(isNotNil))),
+      combineLatestWith(dragging$),
+      map(([[hovered, lastHovered], dragging]) => ({ hovered: hovered ?? lastHovered, leaving: isNil(hovered) || dragging })),
+    ).pipe(
+      combineLatestWith(mouse$, compiler$),
+      map(([{ hovered, leaving }, mouse, compiler]) => {
+        this.bg.selectAll('path').classed('hovered', false).classed('parent', false);
+        const { clip, d, dy, ...attrs } = compiler.getTextPathAttrs(hovered, mouse, this.measure(hovered.name, highlight.text.node()!.computedStyleMap()));
+
+        if (leaving || !hovered) {
+          this.bg.select('g.marks').selectAll('use').data([]).join(enter => enter, update => update);
+        } else {
+          highlight.text.attrs({ ...attrs }).select('textPath').text(hovered.name);
+          highlight.path.elem.attr('d', d);
+          highlight.clip.elem.select('path').attr('d', clip);
+          highlight.background.attr('d', clip);
+          selectAll(hovered.parents.map(({ name }) => this.svg.querySelector(`path[name='${name}']`))).raise().classed('parent', true);
+          select(this.svg.querySelector(`path[name='${hovered.name}']`)).raise().classed('hovered', true);
+          this.bg.select('g.marks').selectAll<SVGUseElement, Mark>('use').data(hovered.marks).join(
+            enter => enter.append('use').attrs(mark => compiler.getMarkAttrs(mark)),
+            update => update.attrs(mark => compiler.getMarkAttrs(mark)),
+          );
         }
 
-        const measurements = this.measure(shape.name, (highlight.text.node() as SVGTextElement).computedStyleMap());
-        const to = compiler.getTextPathAttrs(shape, mouse, measurements).dy;
-        return { text: shape.name, from: measurements.fontSize * Math.sign(-to), to };
+        const { fontSize } = this.measure(hovered.name, (highlight.text.node() as SVGTextElement).computedStyleMap());
+        return { text: hovered.name, from: fontSize * Math.sign(-dy), to: dy, leaving };
       }),
-      distinctUntilChanged(({ text, from, to }, other) => text === other.text && from === other.from && to === other.to),
-    ).subscribe(({ text, from, to }) => {
-      const totalDuration = 750;
-      const duration = 300;
-      const stagger = (totalDuration - duration) / text.length;
-      highlight.background.transition().duration(totalDuration - duration).ease(easeCircleOut).styleTween('opacity', () => String);
-      highlight.text.transition().duration(totalDuration).ease(easeCircleOut).attrTween('dy', () => T => Array.from({ length: text.length })
+      distinctUntilChanged((prev, cur) => (prev.leaving ? cur.leaving : equals(prev, cur))), // if leaving, ignore other changes
+    ).subscribe(({ text: { length }, from, to, leaving }) => {
+      const [D, d] = [750, 300]; // [full animation duration, individual glyph animation duration]
+      const stagger = (D - d) / (length - 1);
+      highlight.background.transition().duration(D).ease(easeCircleOut).styleTween('opacity', () => t => String(leaving ? 1 - t : t));
+      highlight.text.transition().duration(D).ease(easeCircleOut).attrTween('dy', () => T => Array.from({ length })
         // offset, scale, clamp and ease time reference for animation of each glyph
-        .map((_, i) => T - (stagger / totalDuration) * i)
-        .map(t => t / (duration / totalDuration))
+        .map((_, i) => T - i * (stagger / D))
+        .map(t => t * (D / d))
         .map(t => Math.max(0, Math.min(1, t)))
         .map(easeBackOut)
 
-        .map(t => from + t * (to - from))
+        .map(t => (leaving ? to + t * (from - to) : from + t * (to - from)))
 
         // transform absolute positions into sequential relative offsets
         .reduce((offsets, abs, i, arr) => [...offsets, abs - (arr[i - 1] ?? 0)], <number[]>[])
         .join(' '));
-    });
-
-    combineLatest([hovered$, mouse$, compiler$]).pipe(
-      takeUntil(super.disconnected),
-    ).subscribe(([shape, mouse, compiler]) => {
-      this.bg.selectAll('path').classed('hovered', false).classed('parent', false);
-
-      if (shape) {
-        const {
-          clip, d, ...attrs
-        } = compiler.getTextPathAttrs(shape, mouse, this.measure(shape.name, highlight.text.node()!.computedStyleMap()));
-
-        highlight.text.attrs({ ...attrs }).select('textPath').text(shape.name);
-        highlight.path.elem.attr('d', d);
-        highlight.clip.elem.select('path').attr('d', clip);
-        highlight.background.attr('d', clip);
-        selectAll(shape.parents.map(({ name }) => this.svg.querySelector(`path[name='${name}']`))).raise().classed('parent', true);
-        select(this.svg.querySelector(`path[name='${shape.name}']`)).raise().classed('hovered', true);
-        this.bg.select('g.marks').selectAll<SVGUseElement, Mark>('use').data(shape.marks).join(
-          enter => enter.append('use').attrs(mark => compiler.getMarkAttrs(mark)),
-          update => update.attrs(mark => compiler.getMarkAttrs(mark)),
-        );
-      } else {
-        highlight.text.select('textPath').text('').attr('dy', '9999');
-        highlight.background.attr('d', null);
-        this.bg.select('g.marks').selectAll('use').data([]).join(enter => enter, update => update);
-      }
     });
   }
 
