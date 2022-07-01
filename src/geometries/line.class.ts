@@ -21,12 +21,8 @@ export class Line implements Geometry {
   }
 
   public closestPointTo(point: Point): ClosestPoint {
-    return this.project(point).closestPointTo(point);
-  }
-
-  public project(point: Point): Point {
     // always intersects, by geometric definition
-    return this.intersectWith(new Line(this.vector.perpendicular, point)) as Point;
+    return (this.intersectWith(new Line(this.vector.perpendicular, point)) as Point).closestPointTo(point);
   }
 
   /**

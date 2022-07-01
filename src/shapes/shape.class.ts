@@ -36,7 +36,7 @@ class ShapeImpl<T extends ShapeType, G extends Geometry> {
     this.priority = ShapeImpl.PRIORITIES[type] ?? 9;
   }
 
-  public using(geometry: G): ShapeImpl<T, G> {
+  public reshape(geometry: G): ShapeImpl<T, G> {
     return new ShapeImpl(this.type, geometry, this.name, this.aka, this.parents, this.marks);
   }
 

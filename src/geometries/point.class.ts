@@ -1,4 +1,3 @@
-import { type Line } from './line.class';
 import { type ClosestPoint, type Geometry } from './module';
 import { Vector } from './vector.class';
 
@@ -16,10 +15,6 @@ export class Point implements Geometry {
 
   public closestPointTo(point: Point): ClosestPoint {
     return Object.assign(this, { distance: this.distanceFrom(point) });
-  }
-
-  public projectOnto(line: Line): Point {
-    return line.project(this);
   }
 
 }

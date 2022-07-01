@@ -3,9 +3,10 @@ import { select, selectAll, Selection } from 'd3-selection';
 import 'd3-selection-multi';
 import { animationFrameScheduler, BehaviorSubject, combineLatest, concatAll, debounceTime, distinctUntilChanged, EMPTY, endWith, exhaustMap, filter, fromEvent, map, merge, ReplaySubject, scheduled, Subject, switchMap, takeUntil, tap, withLatestFrom } from 'rxjs';
 
+import { equals } from 'utils/compare';
+
 import { Angle, Circle, Line, Point, Segment } from '../geometries/module';
 import { angle, angularBisector, bisector, circle, identify, isVertex, line, Mark, point, ShapesCompiler, side, vertex, type Shape, type ShapeVertex } from '../shapes/module';
-
 import { maxBy, minBy, pairs, triads } from '../utils/arrays';
 import { isNil, type Maybe } from '../utils/maybe';
 import onResize from '../utils/on-resize';
@@ -120,8 +121,9 @@ class VirtualChalkboard extends RxElement {
           ] = [vertices, sides, bisects, ngBisects];
 
           const [circumCtr, inCtr] = [bisect1.intersectWith(bisect2)!, ngBisect1.intersectWith(ngBisect2)!]; // these intersections can't be `null`, by geometric definition
+
           circles.push(
-            largest.isObtuse() ? enclosing : enclosing.using(new Circle(circumCtr, circumCtr.distanceFrom(A))),
+            largest.isObtuse() ? enclosing : enclosing.reshape(new Circle(circumCtr, circumCtr.distanceFrom(A))),
             ...pairs(extNgBisects)
               .map(([{ geometry: l1 }, { geometry: l2 }]) => l1.intersectWith(l2)!)
               .flatMap((ctr, i) => [
@@ -132,7 +134,7 @@ class VirtualChalkboard extends RxElement {
                 }),
               ]),
             circle(new Circle(circumCtr, circumCtr.distanceFrom(A)), { name: 'Circumcircle of ABC', parents: sides }),
-            circle(new Circle(inCtr, inCtr.distanceFrom(inCtr.projectOnto(AB))), { name: 'Incircle of ABC', parents: sides }),
+            circle(new Circle(inCtr, AB.closestPointTo(inCtr).distance), { name: 'Incircle of ABC', parents: sides }),
             point(circumCtr, { name: 'Cirumcentre', parents: bisects, marks: bisects.flatMap(({ marks }) => marks) }),
             point(inCtr, { name: 'Incentre', parents: ngBisects, marks: ngBisects.flatMap(({ marks }) => marks) }),
           );
@@ -273,7 +275,7 @@ class VirtualChalkboard extends RxElement {
   }
 
   private reposition(hovered: ShapeVertex, at: Point): void {
-    this.vertices$.next(this.vertices$.getValue().map(v => (v.name === hovered.name ? hovered.using(at) : v)));
+    this.vertices$.next(this.vertices$.getValue().map(v => (v.name === hovered.name ? hovered.reshape(at) : v)));
   }
 
   private redraw(vertices: ShapeVertex[], shapes: Shape[], compiler: ShapesCompiler, smooth = false): void {
@@ -288,25 +290,16 @@ class VirtualChalkboard extends RxElement {
         enter => enter.append('path').attrs(s => compiler.getPathAttrs(s)),
         update => update.call(u => (smooth ? u.transition() : u).attrs(s => compiler.getPathAttrs(s))),
       );
-
-    // this.bg.select('g.vertices').selectAll<SVGPathElement, Shape>('use')
-    //   .data(vertices, identify).join(
-    //     enter => enter.append('use')
-    //       .attrs(s => ({ href: `#vertex-${s.name.toLowerCase()}` }))
-    //       .attr('transform', ({ geometry: p }) => `translate(${compiler.coords(p)})`),
-    //     update => update.call(u => (smooth ? u.transition() : u).attrs(s => compiler.getPathAttrs(s)).attr('transform', ({ geometry: g }) => `translate(${compiler.coords(g)})`)),
-    //   );
   }
 
   private measure(text: string, styles: StylePropertyMapReadOnly): { textLength: number, fontSize: number } {
     select(this.measurer)
-      .style('font-size', String(styles.get('font-size') || ''))
-      .style('letter-spacing', String(styles.get('letter-spacing') || ''))
+      .style('font-size', String(styles.get('font-size') ?? ''))
+      .style('letter-spacing', String(styles.get('letter-spacing') ?? ''))
       .text(text);
 
-    const { value: spacing } = styles.get('letter-spacing') as CSSKeywordValue | CSSUnitValue;
     return {
-      textLength: this.measurer.getComputedTextLength() + Math.max(0, text.length - 1) * (spacing === 'normal' ? 0 : +spacing),
+      textLength: this.measurer.getComputedTextLength(),
       fontSize: (styles.get('font-size') as CSSUnitValue).value,
     };
   }

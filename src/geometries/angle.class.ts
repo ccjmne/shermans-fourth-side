@@ -1,4 +1,4 @@
-import { isNearly, εθ } from '../utils/limits';
+import { isNearly, εθ } from '../utils/compare';
 
 import { Line } from './line.class';
 import { type ClosestPoint, type Geometry, type Point } from './module';

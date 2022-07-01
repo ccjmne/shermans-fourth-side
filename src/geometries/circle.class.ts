@@ -1,5 +1,5 @@
 import { minBy } from '../utils/arrays';
-import { ε0 } from '../utils/limits';
+import { ε0 } from '../utils/compare';
 
 import { Line } from './line.class';
 import { type ClosestPoint, type Geometry } from './module';
