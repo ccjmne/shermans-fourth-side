@@ -1,5 +1,5 @@
 import { ε0 } from 'utils/compare';
-import { minBy } from 'utils/utils';
+import { minBy, type Tuple } from 'utils/utils';
 
 import { Line } from './line.class';
 import { type ClosestPoint, type Geometry } from './module';
@@ -29,7 +29,10 @@ export class Circle implements Geometry {
   constructor(public readonly O: Point, public readonly r: number) { }
 
   public closestPointTo(point: Point): ClosestPoint {
-    return minBy(this.intersectWith(Line.fromPoints(this.O, point)).map(p => p.closestPointTo(point)), ({ distance }) => distance); // these intersections must exist, by geometric definition
+    return minBy(
+      this.intersectWith(Line.fromPoints(this.O, point)).map(p => p.closestPointTo(point)) as Tuple<ClosestPoint, 2>, // these intersections must exist, by geometric definition
+      ({ distance }) => distance,
+    );
   }
 
   /**

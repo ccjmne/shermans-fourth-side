@@ -39,7 +39,7 @@ function unobserve(elem: Element): void {
   }
 }
 
-export default function onResize(
+export function onResize(
   elem: Element,
   { init, ...options }: ResizeObserverOptions & { init: boolean } = { init: false },
 ): Observable<DOMRect> {

@@ -1,4 +1,4 @@
-import { Point } from '../geometries/module';
+import { Point } from 'geometries/module';
 
 /**
  * the `Mark`s have a `kind` that will refer to a `path` SVG Element in `defs` to be linked to through `<use href=...>`

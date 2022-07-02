@@ -1,4 +1,4 @@
-import { isNotNil, Maybe } from './maybe';
+import { Definitely, isNotNil, Maybe } from './maybe';
 
 type TupleRec<T, N extends number, R extends unknown[]> = R['length'] extends N ? R : TupleRec<T, N, [T, ...R]>;
 export type Tuple<T, N extends number> = N extends N ? number extends N ? T[] : { length: N } & TupleRec<T, N, []> : never;
@@ -63,24 +63,25 @@ export function occurrences<T>(
   return aggregate(items, by, ({ length }) => length);
 }
 
-export function select<T>(items: T[], selector: (a: T, b: T) => T): T {
+export function select<T>(items: [], selector: (a: T, b: T) => T): undefined;
+export function select<T>(items: [T, ...T[]], selector: (a: T, b: T) => T): Definitely<T>;
+export function select<T>(items: T[], selector: (a: T, b: T) => T): Maybe<T>;
+export function select<T>(items: T[], selector: (a: T, b: T) => T): Maybe<T> {
   // Avoid: TypeError: Reduce of empty array with no initial value
-  return items.slice(1).reduce((most, item) => selector(most, item), items[0]);
+  return items.reduce((most, item) => selector(most, item), items[0]);
 }
 
-export function min(values: number[]): number {
-  return select(values, (a, b) => (b < a ? b : a));
-}
-
-export function max(values: number[]): number {
-  return select(values, (a, b) => (b > a ? b : a));
-}
-
-export function minBy<T, V>(values: T[], by: (item: T) => V = identity): T {
+export function minBy<T, V>(values: [], by: (item: T) => V): undefined;
+export function minBy<T, V>(values: [T, ...T[]], by: (item: T) => V): Definitely<T>;
+export function minBy<T, V>(values: T[], by: (item: T) => V): Maybe<T>;
+export function minBy<T, V>(values: T[], by: (item: T) => V = identity): Maybe<T> {
   return select(values, (a, b) => (by(b) < by(a) ? b : a));
 }
 
-export function maxBy<T, V>(values: T[], by: (item: T) => V = identity): T {
+export function maxBy<T, V>(values: [], by: (item: T) => V): undefined;
+export function maxBy<T, V>(values: [T, ...T[]], by: (item: T) => V): Definitely<T>;
+export function maxBy<T, V>(values: T[], by: (item: T) => V): Maybe<T>;
+export function maxBy<T, V>(values: T[], by: (item: T) => V = identity): Maybe<T> {
   return select(values, (a, b) => (by(b) > by(a) ? b : a));
 }
 

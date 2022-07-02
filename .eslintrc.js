@@ -73,6 +73,10 @@ module.exports = {
       // code style
       'arrow-parens': ['warn', 'as-needed'],
       'comma-dangle': ['warn', 'always-multiline'],
+      '@typescript-eslint/consistent-type-assertions': ['error', {
+        assertionStyle: 'as',
+        objectLiteralTypeAssertions: 'allow-as-parameter',
+      }],
       'import/extensions': ['warn', 'never'],
       'import/order': ['warn', {
         'groups': ['builtin', 'external', 'internal', 'unknown', 'parent', 'sibling', 'index', 'object'],
@@ -80,7 +84,7 @@ module.exports = {
         'alphabetize': { order: 'asc' },
       }],
       'import/prefer-default-export': 'off', // in fact, favour named exports
-      'import/no-default-export': 'off', // these are acceptable/ may be necessary when interfacing with some tools
+      'import/no-default-export': ['warn'], // these are acceptable/ may be necessary when interfacing with some tools
       'indent': 'off',
       '@typescript-eslint/indent': ['warn', 2, { SwitchCase: 0 }],
       'max-len': ['warn', 140, 4, {
@@ -92,10 +96,14 @@ module.exports = {
       }],
       'no-floating-decimal': 'off',
       '@typescript-eslint/member-delimiter-style': ['warn', { singleline: { delimiter: 'comma' }, multilineDetection: 'last-member' }],
+      'object-property-newline': 'warn',
+      '@typescript-eslint/prefer-readonly': 'warn',
+      '@typescript-eslint/prefer-ts-expect-error': 'warn',
       'quotes': ['warn', 'single', { allowTemplateLiterals: true, avoidEscape: true }],
       'quote-props': ['warn', 'consistent-as-needed'],
       'semi': 'off',
       '@typescript-eslint/semi': ['warn', 'always'],
+      '@typescript-eslint/strict-boolean-expressions': 'warn',
     },
     ...{
       // code smells

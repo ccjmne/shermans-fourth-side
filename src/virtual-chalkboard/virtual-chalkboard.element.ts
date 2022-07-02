@@ -1,18 +1,18 @@
 import { easeBackOut, easeCircleOut } from 'd3-ease';
-import { select, selectAll, Selection } from 'd3-selection';
+import { select, selectAll, type Selection } from 'd3-selection';
 import 'd3-selection-multi';
 import { BehaviorSubject, combineLatestWith, debounceTime, distinctUntilChanged, EMPTY, endWith, exhaustMap, filter, fromEvent, map, merge, ReplaySubject, Subject, switchMap, takeUntil, tap, withLatestFrom } from 'rxjs';
 
+import { Angle, Circle, Line, Point, Segment } from 'geometries/module';
+import { angle, angularBisector, bisector, circle, identify, isVertex, line, Mark, point, ShapesCompiler, ShapeType, side, vertex, type Shape, type ShapeVertex } from 'shapes/module';
+import { type ShapeAngle } from 'shapes/shape.class';
 import { pairs, triads } from 'utils/arrays';
 import { equals } from 'utils/compare';
 import { isNil, isNotNil, type Maybe } from 'utils/maybe';
-import onResize from 'utils/on-resize';
-import RxElement from 'utils/rx-element.class';
+import { onResize } from 'utils/on-resize';
+import { RxElement } from 'utils/rx-element.class';
 import { defineClip, definePath } from 'utils/svg-defs';
-import { aggregate, maxBy, minBy } from 'utils/utils';
-
-import { Angle, Circle, Line, Point, Segment } from '../geometries/module';
-import { angle, angularBisector, bisector, circle, identify, isVertex, line, Mark, point, ShapesCompiler, ShapeType, side, vertex, type Shape, type ShapeVertex } from '../shapes/module';
+import { aggregate, maxBy, minBy, type Tuple } from 'utils/utils';
 
 import template from './virtual-chalkboard.html';
 
@@ -97,7 +97,7 @@ class VirtualChalkboard extends RxElement {
         const extNgBisects = angles.map(θ => line(θ.geometry.bisector(true), { name: `External bisector of ${θ.aka}` }));
         const extSides = sides.map(s => line(s.geometry.extend(), { name: `${s.name} (extended)`, parents: [s] }));
 
-        const circles = <Shape[]>[];
+        const circles = [] as Shape[];
         const largest = maxBy(angles, ({ geometry: θ }) => Math.abs(θ.angle)).geometry;
         const enclCtr = new Segment(largest.A, largest.C).midpoint;
         const enclosing = circle(new Circle(enclCtr, enclCtr.distanceFrom(largest.A)), {
@@ -168,7 +168,7 @@ class VirtualChalkboard extends RxElement {
         return {
           vert,
           distanceThreshold,
-          snaps: ([] as Shape[]).concat(
+          snaps: [
             line(Line.fromPoints(A, B), { name: 'Flat triangle' }),
             line(new Line(perp, A), { name: 'Right-angle triangle' }),
             line(new Line(perp, B), { name: 'Right-angle triangle' }),
@@ -182,7 +182,7 @@ class VirtualChalkboard extends RxElement {
               .map(p => point(p, { name: 'Isoceles right-angle triangle' })),
             ...[A, B].map(v => new Circle(v, length).intersectWith(new Line(perp, v))
               .map(p => point(p, { name: 'Isoceles right-angle triangle' }))),
-          ),
+          ].flat(),
         };
       }),
       exhaustMap(({ vert, snaps, distanceThreshold }) => mouse$.pipe(
@@ -256,7 +256,7 @@ class VirtualChalkboard extends RxElement {
         .map(t => (leaving ? to + t * (from - to) : from + t * (to - from)))
 
         // transform absolute positions into sequential relative offsets
-        .reduce((offsets, abs, i, arr) => [...offsets, abs - (arr[i - 1] ?? 0)], <number[]>[])
+        .reduce<number[]>((offsets, abs, i, arr) => [...offsets, abs - (arr[i - 1] ?? 0)], [])
         .join(' '));
     });
   }
@@ -280,7 +280,8 @@ class VirtualChalkboard extends RxElement {
       );
 
     this.bg.select('g.points').selectAll<SVGPathElement, Shape>('path')
-      .data([...typed.point, ...typed.vertex], identify).join(
+      // there are no `POINT` shapes when the triangle is **straight**
+      .data([...typed.point ?? [], ...typed.vertex], identify).join(
         enter => enter.append('path').attrs(s => compiler.getPathAttrs(s)),
         update => update.call(u => (smooth ? u.transition() : u).attrs(s => compiler.getPathAttrs(s))),
       );

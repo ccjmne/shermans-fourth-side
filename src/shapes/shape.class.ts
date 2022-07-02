@@ -1,5 +1,5 @@
+import { Angle, Segment, type Circle, type Geometry, type Line, type Point } from 'geometries/module';
 import { type Maybe } from 'utils/maybe';
-import { Angle, Segment, type Circle, type Geometry, type Line, type Point } from '../geometries/module';
 
 import { Mark } from './mark.class';
 
@@ -19,6 +19,9 @@ class ShapeImpl<T extends ShapeType, G extends Geometry> {
 
   public readonly priority: Priority;
 
+  /**
+   * Used for highlighting hovered shape and snapping to most remarkable point
+   */
   private static readonly PRIORITIES: { [key in ShapeType]?: Priority } = {
     [ShapeType.VERTEX]: 0,
     [ShapeType.POINT]: 0,

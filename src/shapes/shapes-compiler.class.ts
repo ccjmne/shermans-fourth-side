@@ -1,8 +1,8 @@
-import { scaleLinear, ScaleLinear } from 'd3-scale';
+import { scaleLinear, type ScaleLinear } from 'd3-scale';
 
+import { Circle, Point, Vector, type Angle, type Line } from 'geometries/module';
 import { sortBy } from 'utils/arrays';
-import UnreachableCaseError from 'utils/unreachable-case-error.class';
-import { Angle, Circle, Line, Point, Vector } from '../geometries/module';
+import { UnreachableCaseError } from 'utils/unreachable-case-error.class';
 
 import { type Mark } from './mark.class';
 import { ShapeType, type Shape } from './shape.class';

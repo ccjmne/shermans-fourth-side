@@ -23,7 +23,7 @@ const HTML_MINIFY_OPTS: MinifyOptions = {
 
 const src = resolve(__dirname, 'src');
 const dist = resolve(__dirname, 'dist');
-export default (
+export default ( // eslint-disable-line import/no-default-export
   _env: string,
   { mode }: { mode?: 'production' | 'development' } = { mode: 'production' },
 ): Configuration & { devServer: DevServerConfiguration } => ({

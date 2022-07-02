@@ -2,7 +2,7 @@ import { Observable, Subject } from 'rxjs';
 
 const unsubscribe = Symbol('unsubscribe');
 
-export default abstract class RxElement extends HTMLElement {
+export abstract class RxElement extends HTMLElement {
 
   private [unsubscribe] = new Subject<true>();
 
