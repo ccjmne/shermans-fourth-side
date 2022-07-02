@@ -3,7 +3,7 @@ import { select, selectAll, type Selection } from 'd3-selection';
 import 'd3-selection-multi';
 import { BehaviorSubject, combineLatest, combineLatestWith, debounceTime, distinctUntilChanged, EMPTY, endWith, exhaustMap, filter, fromEvent, map, merge, ReplaySubject, Subject, switchMap, takeUntil, tap, withLatestFrom } from 'rxjs';
 
-import { Angle, Circle, Line, Point, Segment } from 'geometries/module';
+import { Angle, Circle, Point, Segment } from 'geometries/module';
 import { angle, angularBisector, bisector, circle, identify, isVertex, line, Mark, point, ShapesCompiler, ShapeType, side, type IDVertex, type Shape, type ShapeVertex } from 'shapes/module';
 import { vertex, type ShapeAngle } from 'shapes/shape.class';
 import { pairs, triads } from 'utils/arrays';
@@ -12,42 +12,10 @@ import { isNil, isNotNil, type Maybe } from 'utils/maybe';
 import { onResize } from 'utils/on-resize';
 import { RxElement } from 'utils/rx-element.class';
 import { defineClip, definePath } from 'utils/svg-defs';
-import { aggregate, maxBy, minBy, type Tuple } from 'utils/utils';
+import { aggregate, maxBy, type Tuple } from 'utils/utils';
 
+import { attemptSnapping, selectClosest } from './proximity';
 import template from './virtual-chalkboard.html';
-
-function selectClosest(shapes: Shape[], from: Point, distanceThreshold: number) {
-  return minBy(
-    shapes
-      .map(shape => ({ shape, closestPoint: shape.geometry.closestPointTo(from) }))
-      .filter(({ closestPoint }) => closestPoint.distance < distanceThreshold),
-    ({ shape: { priority }, closestPoint: { distance } }) => priority + distance,
-  );
-}
-
-function computeSnaps(A: Point, B: Point): Shape[] {
-  const { length, midpoint, vector: { perpendicular: perp } } = new Segment(A, B);
-  return [
-    line(Line.fromPoints(A, B), { name: 'Flat triangle' }),
-    line(new Line(perp, A), { name: 'Right-angle triangle' }),
-    line(new Line(perp, B), { name: 'Right-angle triangle' }),
-    line(new Line(perp, midpoint), { name: 'Isoceles triangle' }),
-    circle(new Circle(midpoint, length / 2), { name: 'Right-angle triangle' }),
-    circle(new Circle(A, length), { name: 'Isoceles triangle' }),
-    circle(new Circle(B, length), { name: 'Isoceles triangle' }),
-    new Circle(A, length).intersectWith(new Line(perp, midpoint))
-      .map(p => point(p, { name: 'Equirectangular triangle' })),
-    new Circle(midpoint, length / 2).intersectWith(new Line(perp, midpoint))
-      .map(p => point(p, { name: 'Isoceles right-angle triangle' })),
-    ...[A, B].map(v => new Circle(v, length).intersectWith(new Line(perp, v))
-      .map(p => point(p, { name: 'Isoceles right-angle triangle' }))),
-  ].flat();
-}
-
-function attemptSnapping(from: Point, snaps: Shape[], distanceThreshold: number): { snappedTo: Maybe<Shape>, at: Point } {
-  const closest = selectClosest(snaps, from, distanceThreshold);
-  return { snappedTo: closest?.shape, at: closest?.closestPoint ?? from };
-}
 
 class VirtualChalkboard extends RxElement {
 
@@ -105,14 +73,10 @@ class VirtualChalkboard extends RxElement {
     combineLatest([this.points$, compiler$]).pipe(
       map(([{ flexible, ...points }, { distanceThreshold }]) => {
         const { [flexible]: flexibleVertex, ...fixed } = points;
-        const { snappedTo, at } = attemptSnapping(
-          flexibleVertex,
-          computeSnaps(...(Object.values(fixed) as [Point, Point])),
-          distanceThreshold,
-        );
-        return { ...points, [flexible]: at, to: snappedTo };
+        const { snappedTo, at } = attemptSnapping(flexibleVertex, Object.values(fixed) as Tuple<Point, 2>, distanceThreshold);
+        return { ...points, [flexible]: at, snappedTo };
       }),
-      tap(({ to }) => classification.text(to?.name ?? 'Scalene triangle')),
+      tap(({ snappedTo }) => classification.text(snappedTo?.name ?? 'Scalene triangle')),
       map(({ A, B, C }) => [
         vertex(A, { name: 'Vertex A', id: 'A' }),
         vertex(B, { name: 'Vertex B', id: 'B' }),
