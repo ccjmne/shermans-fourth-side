@@ -3,15 +3,16 @@ import { select, selectAll, Selection } from 'd3-selection';
 import 'd3-selection-multi';
 import { BehaviorSubject, combineLatestWith, debounceTime, distinctUntilChanged, EMPTY, endWith, exhaustMap, filter, fromEvent, map, merge, ReplaySubject, Subject, switchMap, takeUntil, tap, withLatestFrom } from 'rxjs';
 
+import { pairs, triads } from 'utils/arrays';
 import { equals } from 'utils/compare';
+import { isNil, isNotNil, type Maybe } from 'utils/maybe';
+import onResize from 'utils/on-resize';
+import RxElement from 'utils/rx-element.class';
+import { defineClip, definePath } from 'utils/svg-defs';
+import { aggregate, maxBy, minBy } from 'utils/utils';
 
 import { Angle, Circle, Line, Point, Segment } from '../geometries/module';
-import { angle, angularBisector, bisector, circle, identify, isVertex, line, Mark, point, ShapesCompiler, side, vertex, type Shape, type ShapeVertex } from '../shapes/module';
-import { maxBy, minBy, pairs, triads } from '../utils/arrays';
-import { isNil, isNotNil, type Maybe } from '../utils/maybe';
-import onResize from '../utils/on-resize';
-import RxElement from '../utils/rx-element.class';
-import { defineClip, definePath } from '../utils/svg-defs';
+import { angle, angularBisector, bisector, circle, identify, isVertex, line, Mark, point, ShapesCompiler, ShapeType, side, vertex, type Shape, type ShapeVertex } from '../shapes/module';
 
 import template from './virtual-chalkboard.html';
 
@@ -265,14 +266,21 @@ class VirtualChalkboard extends RxElement {
   }
 
   private redraw(shapes: Shape[], compiler: ShapesCompiler, smooth = false): void {
+    const typed = aggregate(shapes, ({ type }) => ([ShapeType.POINT, ShapeType.SIDE, ShapeType.VERTEX].includes(type) ? type : 'other'));
     this.bg.select('g.shapes').selectAll<SVGPathElement, Shape>('path')
-      .data(shapes.filter(shape => !(shape.geometry instanceof Point)), identify).join(
+      .data(typed.other, identify).join(
+        enter => enter.append('path').attrs(s => compiler.getPathAttrs(s)),
+        update => update.call(u => (smooth ? u.transition() : u).attrs(s => compiler.getPathAttrs(s))),
+      );
+
+    this.bg.select('g.sides').selectAll<SVGPathElement, Shape>('path')
+      .data(typed.side, identify).join(
         enter => enter.append('path').attrs(s => compiler.getPathAttrs(s)),
         update => update.call(u => (smooth ? u.transition() : u).attrs(s => compiler.getPathAttrs(s))),
       );
 
     this.bg.select('g.points').selectAll<SVGPathElement, Shape>('path')
-      .data(shapes.filter(shape => shape.geometry instanceof Point), identify).join(
+      .data([...typed.point, ...typed.vertex], identify).join(
         enter => enter.append('path').attrs(s => compiler.getPathAttrs(s)),
         update => update.call(u => (smooth ? u.transition() : u).attrs(s => compiler.getPathAttrs(s))),
       );
