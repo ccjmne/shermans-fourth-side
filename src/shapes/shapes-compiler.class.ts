@@ -8,7 +8,7 @@ import { type Mark } from './mark.class';
 import { ShapeType, type Shape } from './shape.class';
 
 const VERTEX_RADIUS_PX = 20;
-const CLOSE_DISTANCE_THRESHOLD_PX = 20;
+const CLOSE_DISTANCE_THRESHOLD_PX = 10;
 const TEXT_PADDING = 5;
 
 export type MarkAttrs = Partial<{ href: string, transform: string, name: string }>; // TODO: name?? maybe compute that one from its `Shape`'s name + its mark index?
