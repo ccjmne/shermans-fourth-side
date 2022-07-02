@@ -91,7 +91,7 @@ class VirtualChalkboard extends RxElement {
           name: `Angle ${A.aka}${B.aka}${C.aka}`,
           aka: `angle ${A.aka}${B.aka}${C.aka}`,
           parents: sides.filter(({ geometry: { from, to } }) => [from, to].includes(B.geometry)),
-        }));
+        })) as Tuple<ShapeAngle, 3>;
 
         const ngBisects = angles.map(angularBisector);
         const extNgBisects = angles.map(θ => line(θ.geometry.bisector(true), { name: `External bisector of ${θ.aka}` }));
@@ -133,7 +133,7 @@ class VirtualChalkboard extends RxElement {
             circle(new Circle(circumCtr, circumCtr.distanceFrom(A)), { name: 'Circumcircle of ABC', parents: sides }),
             circle(new Circle(inCtr, AB.closestPointTo(inCtr).distance), { name: 'Incircle of ABC', parents: sides }),
             point(circumCtr, { name: 'Cirumcentre', parents: bisects, marks: bisects.flatMap(({ marks }) => marks) }),
-            point(inCtr, { name: 'Incentre', parents: ngBisects, marks: ngBisects.flatMap(({ marks }) => marks) }),
+            point(inCtr, { name: 'Incentre', parents: [...ngBisects, ...angles], marks: ngBisects.flatMap(({ marks }) => marks) }),
           );
         }
 
