@@ -108,7 +108,7 @@ module.exports = {
       'no-empty-function': 'off',
       '@typescript-eslint/no-empty-function': ['error'],
       'no-unused-vars': 'off',
-      '@typescript-eslint/no-unused-vars': ['error'],
+      '@typescript-eslint/no-unused-vars': ['error', { vars: 'all', args: 'all', argsIgnorePattern: '^_' }],
       'no-use-before-define': 'off',
       '@typescript-eslint/no-use-before-define': ['error', { ignoreTypeReferences: true }],
       'no-useless-constructor': 'off',

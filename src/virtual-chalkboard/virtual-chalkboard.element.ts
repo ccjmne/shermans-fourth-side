@@ -1,7 +1,7 @@
 import { easeBackOut, easeCircleOut } from 'd3-ease';
 import { select, selectAll, Selection } from 'd3-selection';
 import 'd3-selection-multi';
-import { BehaviorSubject, combineLatest, combineLatestWith, debounceTime, distinctUntilChanged, EMPTY, endWith, exhaustMap, filter, fromEvent, map, merge, ReplaySubject, Subject, switchMap, takeUntil, tap, withLatestFrom } from 'rxjs';
+import { BehaviorSubject, combineLatestWith, debounceTime, distinctUntilChanged, EMPTY, endWith, exhaustMap, filter, fromEvent, map, merge, ReplaySubject, Subject, switchMap, takeUntil, tap, withLatestFrom } from 'rxjs';
 
 import { equals } from 'utils/compare';
 
@@ -202,15 +202,15 @@ class VirtualChalkboard extends RxElement {
       takeUntil(super.disconnected),
     ).subscribe(dragging$);
 
-    combineLatest([this.vertices$, shapes$]).pipe(
+    shapes$.pipe(
       withLatestFrom(compiler$),
       takeUntil(super.disconnected),
-    ).subscribe(([[vertices, shapes], compiler]) => this.redraw(vertices, shapes, compiler));
+    ).subscribe(([shapes, compiler]) => this.redraw(shapes, compiler));
 
     compiler$.pipe(
-      withLatestFrom(combineLatest([this.vertices$, shapes$])),
+      withLatestFrom(shapes$),
       takeUntil(super.disconnected),
-    ).subscribe(([compiler, [vertices, shapes]]) => this.redraw(vertices, shapes, compiler, true));
+    ).subscribe(([compiler, shapes]) => this.redraw(shapes, compiler, true));
 
     hovered$.pipe(
       withLatestFrom(hovered$.pipe(filter(isNotNil))),
@@ -264,7 +264,7 @@ class VirtualChalkboard extends RxElement {
     this.vertices$.next(this.vertices$.getValue().map(v => (v.name === hovered.name ? hovered.reshape(at) : v)));
   }
 
-  private redraw(vertices: ShapeVertex[], shapes: Shape[], compiler: ShapesCompiler, smooth = false): void {
+  private redraw(shapes: Shape[], compiler: ShapesCompiler, smooth = false): void {
     this.bg.select('g.shapes').selectAll<SVGPathElement, Shape>('path')
       .data(shapes.filter(shape => !(shape.geometry instanceof Point)), identify).join(
         enter => enter.append('path').attrs(s => compiler.getPathAttrs(s)),
