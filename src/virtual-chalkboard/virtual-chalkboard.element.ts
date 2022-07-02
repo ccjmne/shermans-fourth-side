@@ -1,11 +1,11 @@
 import { easeBackOut, easeCircleOut } from 'd3-ease';
 import { select, selectAll, type Selection } from 'd3-selection';
 import 'd3-selection-multi';
-import { BehaviorSubject, combineLatestWith, debounceTime, distinctUntilChanged, EMPTY, endWith, exhaustMap, filter, fromEvent, map, merge, ReplaySubject, Subject, switchMap, takeUntil, tap, withLatestFrom } from 'rxjs';
+import { BehaviorSubject, combineLatest, combineLatestWith, debounceTime, distinctUntilChanged, EMPTY, endWith, exhaustMap, filter, fromEvent, map, merge, ReplaySubject, Subject, switchMap, takeUntil, tap, withLatestFrom } from 'rxjs';
 
 import { Angle, Circle, Line, Point, Segment } from 'geometries/module';
-import { angle, angularBisector, bisector, circle, identify, isVertex, line, Mark, point, ShapesCompiler, ShapeType, side, vertex, type Shape, type ShapeVertex } from 'shapes/module';
-import { type ShapeAngle } from 'shapes/shape.class';
+import { angle, angularBisector, bisector, circle, identify, isVertex, line, Mark, point, ShapesCompiler, ShapeType, side, type IDVertex, type Shape, type ShapeVertex } from 'shapes/module';
+import { vertex, type ShapeAngle } from 'shapes/shape.class';
 import { pairs, triads } from 'utils/arrays';
 import { equals } from 'utils/compare';
 import { isNil, isNotNil, type Maybe } from 'utils/maybe';
@@ -16,6 +16,39 @@ import { aggregate, maxBy, minBy, type Tuple } from 'utils/utils';
 
 import template from './virtual-chalkboard.html';
 
+function selectClosest(shapes: Shape[], from: Point, distanceThreshold: number) {
+  return minBy(
+    shapes
+      .map(shape => ({ shape, closestPoint: shape.geometry.closestPointTo(from) }))
+      .filter(({ closestPoint }) => closestPoint.distance < distanceThreshold),
+    ({ shape: { priority }, closestPoint: { distance } }) => priority + distance,
+  );
+}
+
+function computeSnaps(A: Point, B: Point): Shape[] {
+  const { length, midpoint, vector: { perpendicular: perp } } = new Segment(A, B);
+  return [
+    line(Line.fromPoints(A, B), { name: 'Flat triangle' }),
+    line(new Line(perp, A), { name: 'Right-angle triangle' }),
+    line(new Line(perp, B), { name: 'Right-angle triangle' }),
+    line(new Line(perp, midpoint), { name: 'Isoceles triangle' }),
+    circle(new Circle(midpoint, length / 2), { name: 'Right-angle triangle' }),
+    circle(new Circle(A, length), { name: 'Isoceles triangle' }),
+    circle(new Circle(B, length), { name: 'Isoceles triangle' }),
+    new Circle(A, length).intersectWith(new Line(perp, midpoint))
+      .map(p => point(p, { name: 'Equirectangular triangle' })),
+    new Circle(midpoint, length / 2).intersectWith(new Line(perp, midpoint))
+      .map(p => point(p, { name: 'Isoceles right-angle triangle' })),
+    ...[A, B].map(v => new Circle(v, length).intersectWith(new Line(perp, v))
+      .map(p => point(p, { name: 'Isoceles right-angle triangle' }))),
+  ].flat();
+}
+
+function attemptSnapping(from: Point, snaps: Shape[], distanceThreshold: number): { snappedTo: Maybe<Shape>, at: Point } {
+  const closest = selectClosest(snaps, from, distanceThreshold);
+  return { snappedTo: closest?.shape, at: closest?.closestPoint ?? from };
+}
+
 class VirtualChalkboard extends RxElement {
 
   private svg!: SVGSVGElement;
@@ -23,19 +56,23 @@ class VirtualChalkboard extends RxElement {
   private bg!: Selection<SVGGElement, unknown, null, unknown>;
   private fg!: Selection<SVGGElement, unknown, null, unknown>;
   private measurer!: SVGTextElement;
-  private readonly vertices$: BehaviorSubject<ShapeVertex[]>;
+  private readonly vertices$: Subject<ShapeVertex[]> = new ReplaySubject(1);
+  private readonly points$: BehaviorSubject<Record<IDVertex, Point> & { flexible: IDVertex }>;
 
   constructor() {
     super();
-    this.vertices$ = new BehaviorSubject([
-      vertex(new Point(-.5, 0), { name: 'Vertex A', aka: 'A' }),
-      vertex(new Point(.5, 0), { name: 'Vertex B', aka: 'B' }),
-      vertex(new Point(.5, .5), { name: 'Vertex C', aka: 'C' }),
-    ]);
-    // this.vertices$ = new BehaviorSubject(Array.from(
-    //   { length: 3 },
-    //   () => new Point(Math.random() * 2 - 1, Math.random() * 2 - 1),
-    // ).map((d, i) => vertex(d).with({ name: `Vertex ${'ABC'[i]}`, aka: 'ABC'[i] })));
+    this.points$ = new BehaviorSubject<Record<IDVertex, Point> & { flexible: IDVertex }>({
+      A: new Point(-.5, 0),
+      B: new Point(.5, 0),
+      C: new Point(.5, .5),
+      flexible: 'C',
+    });
+    // this.points$ = new BehaviorSubject<Record<IDVertex, Point> & { flexible: IDVertex }>({
+    //   A: new Point(Math.random() * 2 - 1, Math.random() * 2 - 1),
+    //   B: new Point(Math.random() * 2 - 1, Math.random() * 2 - 1),
+    //   C: new Point(Math.random() * 2 - 1, Math.random() * 2 - 1),
+    //   flexible: 'C',
+    // });
   }
 
   public connectedCallback(): void {
@@ -61,6 +98,28 @@ class VirtualChalkboard extends RxElement {
     const hovered$ = new Subject<Maybe<Shape>>();
     const dragging$ = new BehaviorSubject<boolean>(false);
 
+    const classification = this.fg.select<SVGTextElement>('text#classification');
+    classification.text('Scalene triangle');
+    classification.attrs({ x: 0, y: 250 });
+
+    combineLatest([this.points$, compiler$]).pipe(
+      map(([{ flexible, ...points }, { distanceThreshold }]) => {
+        const { [flexible]: flexibleVertex, ...fixed } = points;
+        const { snappedTo, at } = attemptSnapping(
+          flexibleVertex,
+          computeSnaps(...(Object.values(fixed) as [Point, Point])),
+          distanceThreshold,
+        );
+        return { ...points, [flexible]: at, to: snappedTo };
+      }),
+      tap(({ to }) => classification.text(to?.name ?? 'Scalene triangle')),
+      map(({ A, B, C }) => [
+        vertex(A, { name: 'Vertex A', id: 'A' }),
+        vertex(B, { name: 'Vertex B', id: 'B' }),
+        vertex(C, { name: 'Vertex C', id: 'C' }),
+      ]),
+    ).subscribe(this.vertices$);
+
     const highlight = {
       text: this.fg.select<SVGTextElement>('text#hovered'),
       path: definePath().in(this.svg),
@@ -72,6 +131,7 @@ class VirtualChalkboard extends RxElement {
 
     onResize(this).pipe(
       debounceTime(100),
+      tap(({ height }) => classification.transition().attrs({ x: 0, y: (height / 2 - 10) })),
       map(rect => new ShapesCompiler(rect)),
       tap(({ Ω: { x, y } }) => this.Ω.transition().attr('transform', `translate(${x},${y})`)),
       takeUntil(super.disconnected),
@@ -88,13 +148,13 @@ class VirtualChalkboard extends RxElement {
         const sides = pairs(vertices).map(([A, B]) => side(A, B));
         const bisects = sides.map(bisector);
         const angles = triads(vertices).map(([A, B, C]) => angle(new Angle(A.geometry, B.geometry, C.geometry), {
-          name: `Angle ${A.aka}${B.aka}${C.aka}`,
-          aka: `angle ${A.aka}${B.aka}${C.aka}`,
+          name: `Angle ${A.id}${B.id}${C.id}`,
+          id: `angle ${A.id}${B.id}${C.id}`,
           parents: sides.filter(({ geometry: { from, to } }) => [from, to].includes(B.geometry)),
         })) as Tuple<ShapeAngle, 3>;
 
         const ngBisects = angles.map(angularBisector);
-        const extNgBisects = angles.map(θ => line(θ.geometry.bisector(true), { name: `External bisector of ${θ.aka}` }));
+        const extNgBisects = angles.map(θ => line(θ.geometry.bisector(true), { name: `External bisector of ${θ.id}` }));
         const extSides = sides.map(s => line(s.geometry.extend(), { name: `${s.name} (extended)`, parents: [s] }));
 
         const circles = [] as Shape[];
@@ -126,7 +186,7 @@ class VirtualChalkboard extends RxElement {
               .flatMap((ctr, i) => [
                 point(ctr, { name: 'Excentre' }),
                 circle(new Circle(ctr, sides[i].geometry.closestPointTo(ctr).distance), {
-                  name: `Excircle to ${sides[i].aka}`,
+                  name: `Excircle to ${sides[i].id}`,
                   parents: [sides[i], ...extSides.filter(s => !s.parents.includes(sides[i]))],
                 }),
               ]),
@@ -145,12 +205,7 @@ class VirtualChalkboard extends RxElement {
     dragging$.pipe(
       switchMap(dragging => (dragging ? EMPTY : mouse$)),
       withLatestFrom(shapes$, compiler$),
-      map(([mouse, shapes, { distanceThreshold }]) => minBy(
-        shapes
-          .map(shape => ({ shape, closest: shape.geometry.closestPointTo(mouse) }))
-          .filter(({ closest }) => closest.distance < distanceThreshold),
-        ({ shape: { priority }, closest: { distance } }) => priority + distance,
-      )?.shape),
+      map(([mouse, shapes, { distanceThreshold }]) => selectClosest(shapes, mouse, distanceThreshold)?.shape),
       distinctUntilChanged(),
       takeUntil(super.disconnected),
     ).subscribe(hovered$);
@@ -160,41 +215,9 @@ class VirtualChalkboard extends RxElement {
       withLatestFrom(hovered$),
       map(([, hovered]) => hovered),
       filter(isVertex),
-      withLatestFrom(this.vertices$, compiler$),
-      map(([vert, vertices, { distanceThreshold }]) => {
-        const [{ geometry: A }, { geometry: B }] = vertices.filter(({ name }) => vert.name !== name);
-        const { length, midpoint, vector: { perpendicular: perp } } = new Segment(A, B);
-
-        return {
-          vert,
-          distanceThreshold,
-          snaps: [
-            line(Line.fromPoints(A, B), { name: 'Flat triangle' }),
-            line(new Line(perp, A), { name: 'Right-angle triangle' }),
-            line(new Line(perp, B), { name: 'Right-angle triangle' }),
-            line(new Line(perp, midpoint), { name: 'Isoceles triangle' }),
-            circle(new Circle(midpoint, length / 2), { name: 'Right-angle triangle' }),
-            circle(new Circle(A, length), { name: 'Isoceles triangle' }),
-            circle(new Circle(B, length), { name: 'Isoceles triangle' }),
-            new Circle(A, length).intersectWith(new Line(perp, midpoint))
-              .map(p => point(p, { name: 'Equirectangular triangle' })),
-            new Circle(midpoint, length / 2).intersectWith(new Line(perp, midpoint))
-              .map(p => point(p, { name: 'Isoceles right-angle triangle' })),
-            ...[A, B].map(v => new Circle(v, length).intersectWith(new Line(perp, v))
-              .map(p => point(p, { name: 'Isoceles right-angle triangle' }))),
-          ].flat(),
-        };
-      }),
-      exhaustMap(({ vert, snaps, distanceThreshold }) => mouse$.pipe(
-        // TODO: replace hard-coded boolean with snap-mode toggle
-        // eslint-disable-next-line no-constant-condition
-        map(at => (true ? at : minBy(
-          snaps
-            .map(snap => ({ snap, closest: snap.geometry.closestPointTo(at) }))
-            .filter(({ closest }) => closest.distance < distanceThreshold),
-          ({ snap: { priority }, closest: { distance } }) => priority + distance,
-        )?.closest || at)),
-        tap(at => this.reposition(vert, at)),
+      withLatestFrom(this.vertices$),
+      exhaustMap(([{ id }, [{ geometry: A }, { geometry: B }, { geometry: C }]]) => mouse$.pipe(
+        map(at => this.points$.next({ A, B, C, [id]: at, flexible: id })),
         map(() => true),
         takeUntil(merge(fromEvent(this.svg, 'mouseup'), fromEvent(this.svg, 'touchend'))),
         endWith(false),
@@ -259,10 +282,6 @@ class VirtualChalkboard extends RxElement {
         .reduce<number[]>((offsets, abs, i, arr) => [...offsets, abs - (arr[i - 1] ?? 0)], [])
         .join(' '));
     });
-  }
-
-  private reposition(hovered: ShapeVertex, at: Point): void {
-    this.vertices$.next(this.vertices$.getValue().map(v => (v.name === hovered.name ? hovered.reshape(at) : v)));
   }
 
   private redraw(shapes: Shape[], compiler: ShapesCompiler, smooth = false): void {
