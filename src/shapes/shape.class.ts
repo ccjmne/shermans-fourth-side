@@ -1,5 +1,5 @@
+import { type Maybe } from 'utils/maybe';
 import { Angle, Segment, type Circle, type Geometry, type Line, type Point } from '../geometries/module';
-import { type Maybe } from '../utils/maybe';
 
 import { Mark } from './mark.class';
 

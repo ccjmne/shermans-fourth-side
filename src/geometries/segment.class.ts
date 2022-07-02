@@ -1,4 +1,4 @@
-import { minBy } from '../utils/arrays';
+import { minBy } from 'utils/utils';
 
 import { Line } from './line.class';
 import { type ClosestPoint, type Geometry } from './module';

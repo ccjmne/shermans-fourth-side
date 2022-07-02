@@ -1,4 +1,4 @@
-import { type Maybe } from '../utils/maybe';
+import { type Maybe } from 'utils/maybe';
 
 import { type ClosestPoint, type Geometry } from './module';
 import { Point } from './point.class';
