@@ -3,18 +3,19 @@ import { select, selectAll, type Selection } from 'd3-selection';
 import 'd3-selection-multi';
 import { BehaviorSubject, combineLatest, combineLatestWith, debounceTime, distinctUntilChanged, EMPTY, endWith, exhaustMap, filter, fromEvent, map, merge, ReplaySubject, Subject, switchMap, takeUntil, tap, withLatestFrom } from 'rxjs';
 
-import { Angle, Circle, Point, Segment } from 'geometries/module';
-import { angle, angularBisector, bisector, circle, identify, isVertex, line, Mark, point, ShapesCompiler, ShapeType, side, type IDVertex, type Shape, type ShapeVertex } from 'shapes/module';
-import { vertex, type ShapeAngle } from 'shapes/shape.class';
+import { Angle, Point } from 'geometries/module';
+import { angle, identify, isVertex, Mark, ShapesCompiler, ShapeType, side, type IDVertex, type Shape, type ShapeVertex } from 'shapes/module';
+import { ShapeSide, vertex, type ShapeAngle } from 'shapes/shape.class';
 import { pairs, triads } from 'utils/arrays';
 import { equals } from 'utils/compare';
 import { isNil, isNotNil, type Maybe } from 'utils/maybe';
 import { onResize } from 'utils/on-resize';
 import { RxElement } from 'utils/rx-element.class';
 import { defineClip, definePath } from 'utils/svg-defs';
-import { aggregate, maxBy, type Tuple } from 'utils/utils';
+import { aggregate, type Tuple } from 'utils/utils';
 
 import { attemptSnapping, selectClosest } from './proximity';
+import { remarkableShapes } from './remarkable-shapes';
 import template from './virtual-chalkboard.html';
 
 class VirtualChalkboard extends RxElement {
@@ -24,7 +25,7 @@ class VirtualChalkboard extends RxElement {
   private bg!: Selection<SVGGElement, unknown, null, unknown>;
   private fg!: Selection<SVGGElement, unknown, null, unknown>;
   private measurer!: SVGTextElement;
-  private readonly vertices$: Subject<ShapeVertex[]> = new ReplaySubject(1);
+  private readonly vertices$: Subject<Tuple<ShapeVertex, 3>> = new ReplaySubject(1);
   private readonly points$: BehaviorSubject<Record<IDVertex, Point> & { flexible: IDVertex }>;
 
   constructor() {
@@ -81,7 +82,7 @@ class VirtualChalkboard extends RxElement {
         vertex(A, { name: 'Vertex A', id: 'A' }),
         vertex(B, { name: 'Vertex B', id: 'B' }),
         vertex(C, { name: 'Vertex C', id: 'C' }),
-      ]),
+      ] as Tuple<ShapeVertex, 3>),
     ).subscribe(this.vertices$);
 
     const highlight = {
@@ -108,61 +109,16 @@ class VirtualChalkboard extends RxElement {
     ).subscribe(mouse$);
 
     this.vertices$.pipe(
-      map(vertices => {
-        const sides = pairs(vertices).map(([A, B]) => side(A, B));
-        const bisects = sides.map(bisector);
-        const angles = triads(vertices).map(([A, B, C]) => angle(new Angle(A.geometry, B.geometry, C.geometry), {
+      map(vertices => ({ vertices, sides: pairs(vertices).map(([A, B]) => side(A, B)) as Tuple<ShapeSide, 3> })),
+      map(({ vertices, sides }) => remarkableShapes(
+        vertices,
+        sides,
+        triads(vertices).map(([A, B, C]) => angle(new Angle(A.geometry, B.geometry, C.geometry), {
           name: `Angle ${A.id}${B.id}${C.id}`,
           id: `angle ${A.id}${B.id}${C.id}`,
           parents: sides.filter(({ geometry: { from, to } }) => [from, to].includes(B.geometry)),
-        })) as Tuple<ShapeAngle, 3>;
-
-        const ngBisects = angles.map(angularBisector);
-        const extNgBisects = angles.map(θ => line(θ.geometry.bisector(true), { name: `External bisector of ${θ.id}` }));
-        const extSides = sides.map(s => line(s.geometry.extend(), { name: `${s.name} (extended)`, parents: [s] }));
-
-        const circles = [] as Shape[];
-        const largest = maxBy(angles, ({ geometry: θ }) => Math.abs(θ.angle)).geometry;
-        const enclCtr = new Segment(largest.A, largest.C).midpoint;
-        const enclosing = circle(new Circle(enclCtr, enclCtr.distanceFrom(largest.A)), {
-          name: 'Smallest circle enclosing ABC',
-          parents: sides,
-          marks: [new Mark('x', enclCtr, 0)],
-        });
-
-        if (largest.isNearlyStraight()) {
-          // If the triangle is flat, only the smallest enclosing circle exists
-          circles.push(enclosing);
-        } else {
-          const [
-            [{ geometry: A }],
-            [{ geometry: AB }],
-            [{ geometry: bisect1 }, { geometry: bisect2 }],
-            [{ geometry: ngBisect1 }, { geometry: ngBisect2 }],
-          ] = [vertices, sides, bisects, ngBisects];
-
-          const [circumCtr, inCtr] = [bisect1.intersectWith(bisect2)!, ngBisect1.intersectWith(ngBisect2)!]; // these intersections can't be `null`, by geometric definition
-
-          circles.push(
-            largest.isObtuse() ? enclosing : enclosing.reshape(new Circle(circumCtr, circumCtr.distanceFrom(A))),
-            ...pairs(extNgBisects)
-              .map(([{ geometry: l1 }, { geometry: l2 }]) => l1.intersectWith(l2)!)
-              .flatMap((ctr, i) => [
-                point(ctr, { name: 'Excentre' }),
-                circle(new Circle(ctr, sides[i].geometry.closestPointTo(ctr).distance), {
-                  name: `Excircle to ${sides[i].id}`,
-                  parents: [sides[i], ...extSides.filter(s => !s.parents.includes(sides[i]))],
-                }),
-              ]),
-            circle(new Circle(circumCtr, circumCtr.distanceFrom(A)), { name: 'Circumcircle of ABC', parents: sides }),
-            circle(new Circle(inCtr, AB.closestPointTo(inCtr).distance), { name: 'Incircle of ABC', parents: sides }),
-            point(circumCtr, { name: 'Cirumcentre', parents: bisects, marks: bisects.flatMap(({ marks }) => marks) }),
-            point(inCtr, { name: 'Incentre', parents: [...ngBisects, ...angles], marks: ngBisects.flatMap(({ marks }) => marks) }),
-          );
-        }
-
-        return [...extSides, ...bisects, ...ngBisects, ...circles.reverse(), ...extNgBisects, ...angles, ...sides, ...vertices];
-      }),
+        })) as Tuple<ShapeAngle, 3>,
+      )),
       takeUntil(super.disconnected),
     ).subscribe(shapes$);
 
