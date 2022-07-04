@@ -1,15 +1,14 @@
-import { scaleLinear, type ScaleLinear } from 'd3-scale';
-
 import { Circle, Point, Vector, type Angle, type Line } from 'geometries/module';
 import { sortBy } from 'utils/arrays';
+import { Scale } from 'utils/scale.class';
 import { UnreachableCaseError } from 'utils/unreachable-case-error.class';
 
 import { type Mark } from './mark.class';
 import { ShapeType, type Shape } from './shape.class';
 
-const VERTEX_RADIUS_PX = 20;
 const CLOSE_DISTANCE_THRESHOLD_PX = 10;
-const TEXT_PADDING = 5;
+const ANGLE_RADIUS_PX = 20;
+const TEXT_PADDING_PX = 5;
 
 export type MarkAttrs = Partial<{ href: string, transform: string, name: string }>; // TODO: name?? maybe compute that one from its `Shape`'s name + its mark index?
 export type PathAttrs = Partial<{ d: string, class: string, name: string }>;
@@ -24,7 +23,7 @@ function pathAttrs(d: string, { type, name }: Shape): PathAttrs {
 }
 
 function textPathAttrs(d: string, clip: string, above = true): TextPathAttrs {
-  return { d, 'dominant-baseline': above ? 'ideographic' : 'hanging', 'dy': above ? -TEXT_PADDING : TEXT_PADDING, clip };
+  return { d, 'dominant-baseline': above ? 'ideographic' : 'hanging', 'dy': above ? -TEXT_PADDING_PX : TEXT_PADDING_PX, clip };
 }
 
 export class ShapesCompiler {
@@ -32,26 +31,22 @@ export class ShapesCompiler {
   public readonly distanceThreshold: number;
   public readonly Ω: { x: number, y: number };
 
-  private readonly λ: ScaleLinear<number, number, number>; // scale distances
-  private readonly λx: ScaleLinear<number, number, number>; // scale along the x-axis
-  private readonly λy: ScaleLinear<number, number, number>; // scale along the y-axis
+  private readonly λ: Scale;
+  private readonly λy: Scale;
   private readonly circumcircle: Circle;
-  private readonly vertexRadius: number;
 
   constructor({ width, height }: { width: number, height: number }) {
     const Λ = Math.min(width, height) / 2;
     this.Ω = { x: width / 2, y: height / 2 };
-    this.λ = scaleLinear([0, Λ]);
-    this.λx = scaleLinear([-Λ, Λ]).domain([-1, 1]);
-    this.λy = scaleLinear([-Λ, Λ]).domain([1, -1]);
-    this.circumcircle = new Circle(new Point(0, 0), this.λ.invert(Math.sqrt(width ** 2 + height ** 2)) / 2);
-    this.vertexRadius = this.λ.invert(VERTEX_RADIUS_PX);
-    this.distanceThreshold = this.λ.invert(CLOSE_DISTANCE_THRESHOLD_PX);
+    this.λ = new Scale([-Λ, Λ], [-1, 1]);
+    this.λy = new Scale([-Λ, Λ], [1, -1]);
+    this.circumcircle = new Circle(new Point(0, 0), this.λ.local(Math.sqrt(width ** 2 + height ** 2)) / 2);
+    this.distanceThreshold = this.λ.local(CLOSE_DISTANCE_THRESHOLD_PX);
   }
 
   // TODO: perhaps also take its corresponding `Shape`?
   public getMarkAttrs({ kind, at, rotate }: Mark): MarkAttrs {
-    return markAttrs(`translate(${this.coords(at)}) rotate(${rotate * (-180 / Math.PI)})`, kind);
+    return markAttrs(`translate(${this.screen(at)}) rotate(${rotate * (-180 / Math.PI)})`, kind);
   }
 
   public getPathAttrs(shape: Shape): PathAttrs {
@@ -66,7 +61,7 @@ export class ShapesCompiler {
     case ShapeType.CIRCLE:
       return pathAttrs(this.circlePath(shape.geometry), shape);
     case ShapeType.ANGLE:
-      return pathAttrs(this.anglePath(shape.geometry, this.λ.invert(VERTEX_RADIUS_PX * 2)), shape);
+      return pathAttrs(this.anglePath(shape.geometry, this.λ.local(ANGLE_RADIUS_PX * 2)), shape);
     }
 
     throw new UnreachableCaseError(shape);
@@ -83,22 +78,22 @@ export class ShapesCompiler {
     case ShapeType.CIRCLE:
       return this.circleTextPath(shape.geometry, towards, measurements);
     case ShapeType.ANGLE:
-      return this.circleTextPath(new Circle(shape.geometry.B, this.λ.invert(VERTEX_RADIUS_PX * 2)), towards, measurements);
+      return this.circleTextPath(new Circle(shape.geometry.B, this.λ.local(ANGLE_RADIUS_PX * 2)), towards, measurements);
     }
 
     throw new UnreachableCaseError(shape);
   }
 
   public toLocalCoords({ clientX, clientY }: MouseEvent): Point {
-    return new Point(this.λx.invert(clientX - this.Ω.x), this.λy.invert(clientY - this.Ω.y));
+    return new Point(this.λ.local(clientX - this.Ω.x), this.λy.local(clientY - this.Ω.y));
   }
 
-  public coords({ x, y }: Point): string {
-    return `${this.λx(x)},${this.λy(y)}`;
+  private screen({ x, y }: Point): string {
+    return `${this.λ.screen(x)}, ${this.λy.screen(y)}`;
   }
 
   private linePath(points: Point[], closed = false): string {
-    return `M${points.map(p => this.coords(p)).join('L')}${closed ? 'z' : ''}`;
+    return `M${points.map(p => this.screen(p)).join('L')}${closed ? 'z' : ''}`;
   }
 
   /**
@@ -111,15 +106,15 @@ export class ShapesCompiler {
     const Δy = Math.sin(angle);
     const from = new Point(x - Δx * r, y - Δy * r);
     const to = new Point(x + Δx * r, y + Δy * r);
-    const λr = this.λ(r);
+    const λr = this.λ.screen(r);
 
-    return `M${this.coords(from)}
-      A${λr},${λr} 0 ${1} ${+sweep} ${this.coords(to)}
-      A${λr},${λr} 0 ${1} ${+sweep} ${this.coords(from)}z`;
+    return `M${this.screen(from)}
+      A${λr},${λr} 0 ${1} ${+sweep} ${this.screen(to)}
+      A${λr},${λr} 0 ${1} ${+sweep} ${this.screen(from)}z`;
   }
 
   private pointPath(point: Point): string {
-    return `M${this.coords(point)} m-5,-5 l10,10 m-10,0 l10,-10`;
+    return `M${this.screen(point)} m-5,-5 l10,10 m-10,0 l10,-10`;
   }
 
   /**
@@ -130,14 +125,14 @@ export class ShapesCompiler {
     const [toA, toC] = [BA, BC].map(vector => vector.resize(angle.isNearlyRight() ? r * (Math.SQRT2 / 2) : r));
     const from = new Point(x + toA.Δx, y + toA.Δy);
     const to = new Point(x + toC.Δx, y + toC.Δy);
-    const λr = this.λ(r);
+    const λr = this.λ.screen(r);
 
     if (angle.isNearlyRight()) {
       return this.linePath([from, new Point(x + (toA.Δx + toC.Δx), y + (toA.Δy + toC.Δy)), to]);
     }
 
-    return `M${this.coords(from)}
-      A${λr},${λr} 0 ${0} ${+angle.isClockwise()} ${this.coords(to)}`;
+    return `M${this.screen(from)}
+      A${λr},${λr} 0 ${0} ${+angle.isClockwise()} ${this.screen(to)}`;
   }
 
   /**
@@ -147,11 +142,11 @@ export class ShapesCompiler {
    */
   private lineTextPath(line: Line, at: Point, { fontSize, textLength }: { fontSize: number, textLength: number }): TextPathAttrs {
     const p = line.closestPointTo(at);
-    const length = this.λ.invert(textLength + 2 * TEXT_PADDING);
-    const height = this.λ.invert(fontSize + 2 * TEXT_PADDING);
+    const length = this.λ.local(textLength + 2 * TEXT_PADDING_PX);
+    const height = this.λ.local(fontSize + 2 * TEXT_PADDING_PX);
     const [A, B] = new Circle(p, length / 2).intersectWith(line);
     const { Δx, Δy } = line.vector.perpendicular.resize(height);
-    const upside = Δy < 0 // always towards positive y-values, or positive x-values if Δy is null (vertical line)
+    const upside = Δy < 0 // always towards positive y-values, or positive x-values if Δy is naught (vertical line)
       ? new Vector(-Δx, -Δy)
       : new Vector(Δy === 0 ? Math.abs(Δx) : Δx, Δy);
 
@@ -169,20 +164,20 @@ export class ShapesCompiler {
   private circleTextPath(circle: Circle, at: Point, { fontSize, textLength }: { fontSize: number, textLength: number }): TextPathAttrs {
     const { r, O } = circle;
     const above = at.y >= O.y;
-    const length = this.λ.invert(textLength + 2 * TEXT_PADDING);
-    const height = this.λ.invert(fontSize + 2 * TEXT_PADDING);
+    const length = this.λ.local(textLength + 2 * TEXT_PADDING_PX);
+    const height = this.λ.local(fontSize + 2 * TEXT_PADDING_PX);
 
     const θ = length / r; // θ / 2π = length / 2πr
     const angleAt = Math.atan2(at.y - O.y, at.x - O.x);
     const [from, to] = [θ / 2, -θ / 2].map(angle => O.translate(Vector.fromAngle(angleAt + angle).resize(r)));
     const [from2, to2] = [from, to].map(point => point.translate(Vector.fromPoints(O, point).resize(height)));
 
-    const [λr, λr2] = [this.λ(r), this.λ(r + height)];
-    const clip = `M${this.coords(from)}
-      A${λr},${λr} 0 ${+(θ > Math.PI)} ${+true} ${this.coords(to)}
-      L${this.coords(to2)}
-      A${λr2},${λr2} 0 ${+(θ > Math.PI)} ${+false} ${this.coords(from2)}
-      L${this.coords(from)}z`;
+    const [λr, λr2] = [this.λ.screen(r), this.λ.screen(r + height)];
+    const clip = `M${this.screen(from)}
+      A${λr},${λr} 0 ${+(θ > Math.PI)} ${+true} ${this.screen(to)}
+      L${this.screen(to2)}
+      A${λr2},${λr2} 0 ${+(θ > Math.PI)} ${+false} ${this.screen(from2)}
+      L${this.screen(from)}z`;
 
     return textPathAttrs(
       this.circlePath(circle, above, Vector.fromPoints(O, at).angle),
@@ -198,7 +193,7 @@ export class ShapesCompiler {
    */
   private pointTextPath(at: Point, { fontSize, textLength }: { fontSize: number, textLength: number }): TextPathAttrs {
     return this.circleTextPath(
-      new Circle(at.translate(new Vector(0, -this.λ.invert(70))), this.λ.invert(80)),
+      new Circle(at.translate(new Vector(0, -this.λ.local(70))), this.λ.local(80)),
       at.translate(new Vector(0, 1)), // always upward
       { fontSize, textLength },
     );
