@@ -1,6 +1,6 @@
-import { Circle, Line, Point, Segment } from 'geometries/module';
-import { circle, line, point, Shape } from 'shapes/module';
-import { Maybe } from 'utils/maybe';
+import { Circle, Line, Segment, type Point } from 'geometries/module';
+import { circle, line, point, type Shape } from 'shapes/module';
+import { type Maybe } from 'utils/maybe';
 import { minBy } from 'utils/utils';
 
 export function selectClosest(shapes: Shape[], from: Point, distanceThreshold: number) {
@@ -15,20 +15,17 @@ export function selectClosest(shapes: Shape[], from: Point, distanceThreshold: n
 function computeSnaps(A: Point, B: Point): Shape[] {
   const { length, midpoint, vector: { perpendicular: perp } } = new Segment(A, B);
   return [
-    line(Line.fromPoints(A, B), { name: 'Flat triangle' }),
-    line(new Line(perp, A), { name: 'Right-angle triangle' }),
-    line(new Line(perp, B), { name: 'Right-angle triangle' }),
-    line(new Line(perp, midpoint), { name: 'Isoceles triangle' }),
-    circle(new Circle(midpoint, length / 2), { name: 'Right-angle triangle' }),
-    circle(new Circle(A, length), { name: 'Isoceles triangle' }),
-    circle(new Circle(B, length), { name: 'Isoceles triangle' }),
-    new Circle(A, length).intersectWith(new Line(perp, midpoint))
-      .map(p => point(p, { name: 'Equirectangular triangle' })),
-    new Circle(midpoint, length / 2).intersectWith(new Line(perp, midpoint))
-      .map(p => point(p, { name: 'Isoceles right-angle triangle' })),
-    ...[A, B].map(v => new Circle(v, length).intersectWith(new Line(perp, v))
-      .map(p => point(p, { name: 'Isoceles right-angle triangle' }))),
-  ].flat();
+    line(Line.fromPoints(A, B), { name: 'Degenerate' }),
+    line(new Line(perp, A), { name: 'Right' }),
+    line(new Line(perp, B), { name: 'Right' }),
+    line(new Line(perp, midpoint), { name: 'Isosceles' }),
+    circle(new Circle(midpoint, length / 2), { name: 'Right' }),
+    circle(new Circle(A, length), { name: 'Isosceles' }),
+    circle(new Circle(B, length), { name: 'Isosceles' }),
+    new Circle(A, length).intersectWith(new Line(perp, midpoint)).map(p => point(p, { name: 'Equilateral' })),
+    new Circle(midpoint, length / 2).intersectWith(new Line(perp, midpoint)).map(p => point(p, { name: 'Isosceles right' })),
+    [A, B].map(vertex => new Circle(vertex, length).intersectWith(new Line(perp, vertex)).map(p => point(p, { name: 'Isosceles right' }))),
+  ].flat(2);
 }
 
 export function attemptSnapping(from: Point, [A, B]: [Point, Point], distanceThreshold: number): { snappedTo: Maybe<Shape>, at: Point } {
