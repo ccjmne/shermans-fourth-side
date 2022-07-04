@@ -1,11 +1,17 @@
+import { isNearly } from 'utils/compare';
+
 import { type Point } from './point.class';
 
 export class Vector {
 
+  public readonly Δx: number;
+  public readonly Δy: number;
   public readonly slope: number;
 
-  constructor(public readonly Δx: number, public readonly Δy: number) {
-    this.slope = Δy / Δx;
+  constructor(Δx: number, Δy: number) {
+    this.Δx = isNearly(Δx, 0) ? 0 : Δx;
+    this.Δy = isNearly(Δy, 0) ? 0 : Δy;
+    this.slope = this.Δy / this.Δx;
   }
 
   public static fromPoints({ x, y }: Point, { x: x2, y: y2 }: Point): Vector {
