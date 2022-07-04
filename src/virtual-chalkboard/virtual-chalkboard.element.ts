@@ -234,7 +234,7 @@ class VirtualChalkboard extends RxElement {
 
     return {
       textLength: this.measurer.getComputedTextLength(),
-      fontSize: (styles.get('font-size') as CSSUnitValue).value,
+      fontSize: (styles.get('font-size') as CSSUnitValue).value + 1, // be generous with the font size
     };
   }
 

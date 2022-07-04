@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Overlock&display=swap');
+
 $background: hsl(223deg 14% 10%);
 
 html,
@@ -9,7 +11,8 @@ body {
 body {
   display: grid;
   background-color: $background;
-  font-family: sans-serif;
+  font-family: 'Overlock', sans-serif;
+  font-size: larger;
   place-items: stretch;
 }
 
