@@ -16,6 +16,7 @@
     "incremental": true,
     "importHelpers": true,
     "noImplicitAny": false,
+    "noUnusedLocals": true,
     "esModuleInterop": true,
     "strictNullChecks": true,
     "resolveJsonModule": true,

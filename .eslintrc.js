@@ -77,6 +77,7 @@ module.exports = {
         assertionStyle: 'as',
         objectLiteralTypeAssertions: 'allow-as-parameter',
       }],
+      // '@typescript-eslint/consistent-type-imports': ['warn'], // wait until import/no-duplicate can auto-merge type imports
       'import/extensions': ['warn', 'never'],
       'import/order': ['warn', {
         'groups': ['builtin', 'external', 'internal', 'unknown', 'parent', 'sibling', 'index', 'object'],
@@ -96,14 +97,14 @@ module.exports = {
       }],
       'no-floating-decimal': 'off',
       '@typescript-eslint/member-delimiter-style': ['warn', { singleline: { delimiter: 'comma' }, multilineDetection: 'last-member' }],
-      'object-property-newline': 'warn',
-      '@typescript-eslint/prefer-readonly': 'warn',
-      '@typescript-eslint/prefer-ts-expect-error': 'warn',
+      'object-property-newline': ['warn'],
+      '@typescript-eslint/prefer-readonly': ['warn'],
+      '@typescript-eslint/prefer-ts-expect-error': ['warn'],
       'quotes': ['warn', 'single', { allowTemplateLiterals: true, avoidEscape: true }],
       'quote-props': ['warn', 'consistent-as-needed'],
       'semi': 'off',
       '@typescript-eslint/semi': ['warn', 'always'],
-      '@typescript-eslint/strict-boolean-expressions': 'warn',
+      '@typescript-eslint/strict-boolean-expressions': ['warn'],
     },
     ...{
       // code smells
@@ -111,10 +112,11 @@ module.exports = {
       'default-case': 'off', // in ts projects, prefer @typescript-eslint/switch-exhaustiveness-check
       '@typescript-eslint/switch-exhaustiveness-check': ['error'],
       'func-names': ['warn', 'as-needed'],
-      'global-require': ['off'], // deprecated, see https://eslint.org/docs/rules/global-require
+      'global-require': 'off', // deprecated, see https://eslint.org/docs/rules/global-require
       'import/no-extraneous-dependencies': ['error', { devDependencies: ['webpack.config.ts', 'tooling/**/*.{js,ts}'] }],
       'no-empty-function': 'off',
       '@typescript-eslint/no-empty-function': ['error'],
+      'no-unused-private-class-members': ['error'],
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': ['error', { vars: 'all', args: 'all', argsIgnorePattern: '^_' }],
       'no-use-before-define': 'off',
