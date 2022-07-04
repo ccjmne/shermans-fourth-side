@@ -163,7 +163,7 @@ class VirtualChalkboard extends RxElement {
     ).pipe(
       combineLatestWith(mouse$, compiler$),
       map(([{ hovered, leaving }, mouse, compiler]) => {
-        this.bg.selectAll('path').classed('hovered', false).classed('parent', false);
+        this.bg.classed('hovering', !leaving).selectAll('path').classed('hovered', false).classed('parent', false);
         const { clip, d, dy, ...attrs } = compiler.getTextPathAttrs(hovered, mouse, this.measure(hovered.name, highlight.text.node()!.computedStyleMap()));
 
         if (leaving || !hovered) {

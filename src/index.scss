@@ -72,4 +72,8 @@ svg {
       stroke-dasharray: none;
     }
   }
+
+  .hovering path:not(.parent, .hovered, .side, .vertex) {
+    stroke: #383838;
+  }
 }
