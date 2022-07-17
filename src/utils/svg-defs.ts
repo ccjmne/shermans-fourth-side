@@ -13,7 +13,7 @@ function getDefs(this: SVGSVGElement): SVGDefsElement {
 
 // credit: https://stackoverflow.com/a/14500054
 export function defineHatch(stroke = 'grey', side = 4): {
-  in: (svg: SVGSVGElement) => { href: string, elem: Selection<SVGPatternElement, unknown, null, undefined> };
+  in: (svg: SVGSVGElement) => { href: `#${string}`, elem: Selection<SVGPatternElement, unknown, null, undefined> };
 } {
   const id = `def:hatch-${++ID_SEQ}`; // eslint-disable-line no-plusplus
   return {
@@ -39,7 +39,7 @@ export function defineHatch(stroke = 'grey', side = 4): {
 }
 
 export function defineClip(d?: string): {
-  in: (svg: SVGSVGElement) => { href: string, elem: Selection<SVGClipPathElement, unknown, null, undefined> };
+  in: (svg: SVGSVGElement) => { href: `#${string}`, elem: Selection<SVGClipPathElement, unknown, null, undefined> };
 } {
   const id = `def:clip-${++ID_SEQ}`; // eslint-disable-line no-plusplus
   return {
@@ -55,7 +55,7 @@ export function defineClip(d?: string): {
 }
 
 export function definePath(d?: string): {
-  in: (svg: SVGSVGElement) => { href: string, elem: Selection<SVGPathElement, unknown, null, undefined> };
+  in: (svg: SVGSVGElement) => { href: `#${string}`, elem: Selection<SVGPathElement, unknown, null, undefined> };
 } {
   const id = `def:path-${++ID_SEQ}`; // eslint-disable-line no-plusplus
   return {

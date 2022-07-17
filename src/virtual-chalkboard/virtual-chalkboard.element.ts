@@ -14,9 +14,10 @@ import { RxElement } from 'utils/rx-element.class';
 import { defineClip, definePath } from 'utils/svg-defs';
 import { aggregate, type Tuple } from 'utils/utils';
 
-import { attemptSnapping, selectClosest } from './proximity';
+import { attemptSnapping, classify, selectClosest, Triangle } from './proximity';
 import { remarkableShapes } from './remarkable-shapes';
-import template from './virtual-chalkboard.html';
+import style from './virtual-chalkboard.lazy.scss';
+import template from './virtual-chalkboard.template.html';
 
 class VirtualChalkboard extends RxElement {
 
@@ -25,11 +26,17 @@ class VirtualChalkboard extends RxElement {
   private bg!: Selection<SVGGElement, unknown, null, unknown>;
   private fg!: Selection<SVGGElement, unknown, null, unknown>;
   private measurer!: SVGTextElement;
-  private readonly vertices$: Subject<Tuple<ShapeVertex, 3>> = new ReplaySubject(1);
+
   private readonly points$: BehaviorSubject<Record<IDVertex, Point> & { flexible: IDVertex }>;
+  private readonly vertices$: Subject<Tuple<ShapeVertex, 3>> = new ReplaySubject(1);
+  private readonly triangle$: Subject<Triangle> = new ReplaySubject(1);
 
   constructor() {
     super();
+
+    style.use({ target: this.shadowRoot });
+    this.shadowRoot.appendChild(template.content.cloneNode(true));
+
     this.points$ = new BehaviorSubject<Record<IDVertex, Point> & { flexible: IDVertex }>({
       A: new Point(-.5, 0),
       B: new Point(.5, 0),
@@ -49,11 +56,7 @@ class VirtualChalkboard extends RxElement {
       return;
     }
 
-    this.innerHTML = template;
-    this.style.display = 'grid';
-    this.style.placeItems = 'stretch';
-
-    this.svg = this.querySelector('svg') as SVGSVGElement; // can't be `null` there, innerHTML was attached and compiled
+    this.svg = this.shadowRoot.querySelector('svg') as SVGSVGElement; // can't be `null` there, innerHTML was attached and compiled
     this.Ω = select(this.svg).select('g.origin');
     this.bg = this.Ω.select('g.background');
     this.fg = this.Ω.select('g.foreground');
@@ -67,22 +70,21 @@ class VirtualChalkboard extends RxElement {
     const hovered$ = new Subject<Maybe<Shape>>();
     const dragging$ = new BehaviorSubject<boolean>(false);
 
-    const classification = this.fg.select<SVGTextElement>('text#classification');
-    classification.text('Scalene triangle');
-    classification.attrs({ x: 0, y: 250 });
+    const classification = this.fg.select<SVGGElement>('g#classification');
+    const classifier = select(this.shadowRoot.querySelector('triangle-classifier'));
 
     combineLatest([this.points$, compiler$]).pipe(
       map(([{ flexible, ...points }, { distanceThreshold }]) => {
         const { [flexible]: flexibleVertex, ...fixed } = points;
-        const { snappedTo, at } = attemptSnapping(flexibleVertex, Object.values(fixed) as Tuple<Point, 2>, distanceThreshold);
-        return { ...points, [flexible]: at, snappedTo };
+        const at = attemptSnapping(flexibleVertex, Object.values(fixed) as Tuple<Point, 2>, distanceThreshold) as unknown as number;
+        return { ...points, [flexible]: at };
       }),
-      tap(({ snappedTo }) => classification.text(snappedTo?.name ?? 'Scalene triangle')),
       map(({ A, B, C }) => [
         vertex(A, { name: 'Vertex A', id: 'A' }),
         vertex(B, { name: 'Vertex B', id: 'B' }),
         vertex(C, { name: 'Vertex C', id: 'C' }),
       ] as Tuple<ShapeVertex, 3>),
+      takeUntil(super.disconnected),
     ).subscribe(this.vertices$);
 
     const highlight = {
@@ -94,9 +96,9 @@ class VirtualChalkboard extends RxElement {
     highlight.text.attr('clip-path', `url(${highlight.clip.href})`);
     highlight.text.append('textPath').attrs({ startOffset: '50%', href: highlight.path.href });
 
-    onResize(this).pipe(
+    onResize(this, { init: true }).pipe(
       debounceTime(100),
-      tap(({ height }) => classification.transition().attrs({ x: 0, y: (height / 2 - 10) })),
+      tap(({ height }) => classification.transition().attrs({ transform: `translate(0, ${(height / 2 - 10)})` })),
       map(rect => new ShapesCompiler(rect)),
       tap(({ Ω: { x, y } }) => this.Ω.transition().attr('transform', `translate(${x},${y})`)),
       takeUntil(super.disconnected),
@@ -110,15 +112,26 @@ class VirtualChalkboard extends RxElement {
 
     this.vertices$.pipe(
       map(vertices => ({ vertices, sides: pairs(vertices).map(([A, B]) => side(A, B)) as Tuple<ShapeSide, 3> })),
-      map(({ vertices, sides }) => remarkableShapes(
+      map(({ vertices, sides }) => ({
         vertices,
         sides,
-        triads(vertices).map(([A, B, C]) => angle(new Angle(A.geometry, B.geometry, C.geometry), {
+        angles: triads(vertices).map(([A, B, C]) => angle(new Angle(A.geometry, B.geometry, C.geometry), {
           name: `Angle ${A.id}${B.id}${C.id}`,
           id: `angle ${A.id}${B.id}${C.id}`,
           parents: sides.filter(({ geometry: { from, to } }) => [from, to].includes(B.geometry)),
         })) as Tuple<ShapeAngle, 3>,
-      )),
+      })),
+      takeUntil(super.disconnected),
+    ).subscribe(this.triangle$);
+
+    this.triangle$.pipe(
+      map(classify),
+      distinctUntilChanged(equals),
+      takeUntil(super.disconnected),
+    ).subscribe(cls => classifier.attrs(cls));
+
+    this.triangle$.pipe(
+      map(remarkableShapes),
       takeUntil(super.disconnected),
     ).subscribe(shapes$);
 
@@ -163,10 +176,10 @@ class VirtualChalkboard extends RxElement {
     ).pipe(
       combineLatestWith(mouse$, compiler$),
       map(([{ hovered, leaving }, mouse, compiler]) => {
-        this.bg.classed('hovering', !leaving).selectAll('path').classed('hovered', false).classed('parent', false);
+        this.bg.selectAll('path').classed('hovered', false).classed('parent', false);
         const { clip, d, dy, ...attrs } = compiler.getTextPathAttrs(hovered, mouse, this.measure(hovered.name, highlight.text.node()!.computedStyleMap()));
 
-        if (leaving || !hovered) {
+        if (leaving) {
           this.bg.select('g.marks').selectAll('use').data([]).join(enter => enter, update => update);
         } else {
           highlight.text.attrs({ ...attrs }).select('textPath').text(hovered.name);
@@ -206,24 +219,21 @@ class VirtualChalkboard extends RxElement {
 
   private redraw(shapes: Shape[], compiler: ShapesCompiler, smooth = false): void {
     const typed = aggregate(shapes, ({ type }) => ([ShapeType.POINT, ShapeType.SIDE, ShapeType.VERTEX].includes(type) ? type : 'other'));
-    this.bg.select('g.shapes').selectAll<SVGPathElement, Shape>('path')
-      .data(typed.other, identify).join(
-        enter => enter.append('path').attrs(s => compiler.getPathAttrs(s)),
-        update => update.call(u => (smooth ? u.transition() : u).attrs(s => compiler.getPathAttrs(s))),
-      );
+    this.bg.select('g.shapes').selectAll<SVGPathElement, Shape>('path').data(typed.other, identify).join(
+      enter => enter.append('path').attrs(s => compiler.getPathAttrs(s)),
+      update => update.call(u => (smooth ? u.transition() : u).attrs(s => compiler.getPathAttrs(s))),
+    );
 
-    this.bg.select('g.sides').selectAll<SVGPathElement, Shape>('path')
-      .data(typed.side, identify).join(
-        enter => enter.append('path').attrs(s => compiler.getPathAttrs(s)),
-        update => update.call(u => (smooth ? u.transition() : u).attrs(s => compiler.getPathAttrs(s))),
-      );
+    this.bg.select('g.sides').selectAll<SVGPathElement, Shape>('path').data(typed.side, identify).join(
+      enter => enter.append('path').attrs(s => compiler.getPathAttrs(s)),
+      update => update.call(u => (smooth ? u.transition() : u).attrs(s => compiler.getPathAttrs(s))),
+    );
 
-    this.bg.select('g.points').selectAll<SVGPathElement, Shape>('path')
-      // there are no `POINT` shapes when the triangle is **straight**
-      .data([...typed.point ?? [], ...typed.vertex], identify).join(
-        enter => enter.append('path').attrs(s => compiler.getPathAttrs(s)),
-        update => update.call(u => (smooth ? u.transition() : u).attrs(s => compiler.getPathAttrs(s))),
-      );
+    // there are no `POINT` shapes when the triangle is **straight**
+    this.bg.select('g.points').selectAll<SVGPathElement, Shape>('path').data([...typed.point ?? [], ...typed.vertex], identify).join(
+      enter => enter.append('path').attrs(s => compiler.getPathAttrs(s)),
+      update => update.call(u => (smooth ? u.transition() : u).attrs(s => compiler.getPathAttrs(s))),
+    );
   }
 
   private measure(text: string, styles: StylePropertyMapReadOnly): { textLength: number, fontSize: number } {
@@ -233,11 +243,13 @@ class VirtualChalkboard extends RxElement {
       .text(text);
 
     return {
-      textLength: this.measurer.getComputedTextLength(),
-      fontSize: (styles.get('font-size') as CSSUnitValue).value + 1, // be generous with the font size
+      textLength: this.measurer.getComputedTextLength() + 4, // be generous with the text length, 2px on either side
+      fontSize: (styles.get('font-size') as CSSUnitValue).value,
     };
   }
 
 }
 
-customElements.define('virtual-chalkboard', VirtualChalkboard);
+if (isNil(customElements.get('virtual-chalkboard'))) {
+  customElements.define('virtual-chalkboard', VirtualChalkboard);
+}

@@ -16,7 +16,6 @@
     "incremental": true,
     "importHelpers": true,
     "noImplicitAny": false,
-    "noUnusedLocals": true,
     "esModuleInterop": true,
     "strictNullChecks": true,
     "resolveJsonModule": true,
@@ -30,6 +29,6 @@
       "module": "CommonJS"
     }
   },
-  "include": [".eslintrc.js", "**/*"],
+  "include": [".eslintrc.js", ".stylelintrc.js", "**/*"],
   "exclude": ["node_modules", "dist"]
 }

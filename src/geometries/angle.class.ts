@@ -1,4 +1,4 @@
-import { isNearly, εθ } from 'utils/compare';
+import { isGreaterThan, isNearly, εθ } from 'utils/compare';
 
 import { Line } from './line.class';
 import { type ClosestPoint, type Geometry, type Point } from './module';
@@ -39,7 +39,7 @@ export class Angle implements Geometry {
   }
 
   public isObtuse(): boolean {
-    return Math.abs(this.angle) > Math.PI / 2;
+    return isGreaterThan(Math.abs(this.angle), Math.PI / 2, εθ);
   }
 
   public closestPointTo(point: Point): ClosestPoint {

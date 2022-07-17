@@ -1,5 +1,6 @@
 import { Circle, Point, Vector, type Angle, type Line } from 'geometries/module';
 import { sortBy } from 'utils/arrays';
+import { isLessThan, isNearly } from 'utils/compare';
 import { Scale } from 'utils/scale.class';
 import { UnreachableCaseError } from 'utils/unreachable-case-error.class';
 
@@ -146,9 +147,9 @@ export class ShapesCompiler {
     const height = this.λ.local(fontSize + 2 * TEXT_PADDING_PX);
     const [A, B] = new Circle(p, length / 2).intersectWith(line);
     const { Δx, Δy } = line.vector.perpendicular.resize(height);
-    const upside = Δy < 0 // always towards positive y-values, or positive x-values if Δy is naught (vertical line)
+    const upside = isLessThan(Δy, 0) // always towards positive y-values, or positive x-values if Δy is naught (vertical line)
       ? new Vector(-Δx, -Δy)
-      : new Vector(Δy === 0 ? Math.abs(Δx) : Δx, Δy);
+      : new Vector(isNearly(Δy, 0) ? Math.abs(Δx) : Δx, Δy);
 
     return textPathAttrs(
       this.linePath(sortBy([A, B], ({ x }) => x)),

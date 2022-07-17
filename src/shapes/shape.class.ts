@@ -82,7 +82,7 @@ export function line(geometry: Line, { name, parents, marks }: ShapeAttrs): Shap
 }
 
 export function circle(geometry: Circle, { name, parents, marks }: ShapeAttrs): ShapeCircle {
-  return new ShapeImpl(ShapeType.CIRCLE, geometry, null, name, parents, marks);
+  return new ShapeImpl(ShapeType.CIRCLE, geometry, null, name, parents, [new Mark('x', geometry.O, 0), ...marks ?? []]);
 }
 
 export function angle(geometry: Angle, { name, id, parents, marks }: ShapeAttrs<string>): ShapeAngle {

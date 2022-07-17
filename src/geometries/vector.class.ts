@@ -1,17 +1,13 @@
-import { isNearly } from 'utils/compare';
+import { isNearly, εθ } from 'utils/compare';
 
 import { type Point } from './point.class';
 
 export class Vector {
 
-  public readonly Δx: number;
-  public readonly Δy: number;
   public readonly slope: number;
 
-  constructor(Δx: number, Δy: number) {
-    this.Δx = isNearly(Δx, 0) ? 0 : Δx;
-    this.Δy = isNearly(Δy, 0) ? 0 : Δy;
-    this.slope = this.Δy / this.Δx;
+  constructor(public readonly Δx: number, public readonly Δy: number) {
+    this.slope = Δy / Δx;
   }
 
   public static fromPoints({ x, y }: Point, { x: x2, y: y2 }: Point): Vector {
@@ -32,11 +28,16 @@ export class Vector {
 
   public get angle(): number {
     return Math.atan2(this.Δy, this.Δx);
+    // return (Math.atan2(this.Δy, this.Δx) + Math.PI * 2) % (Math.PI * 2);
   }
 
   public resize(m: number): Vector {
     const λ = m / this.magnitude;
     return new Vector(this.Δx * λ, this.Δy * λ);
+  }
+
+  public rotate(θ: number): Vector {
+    return Vector.fromAngle(this.angle + θ).resize(this.magnitude);
   }
 
   public dot({ Δx, Δy }: Vector): number {
@@ -48,11 +49,11 @@ export class Vector {
   }
 
   public isVertical(): boolean {
-    return this.Δx === 0;
+    return isNearly(this.Δx, 0);
   }
 
   public isParallelTo(other: Vector): boolean {
-    return this.slope === other.slope || (this.isVertical() && other.isVertical());
+    return isNearly(this.angle, other.angle, εθ);
   }
 
 }

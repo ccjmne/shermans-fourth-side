@@ -2,9 +2,9 @@
 npm install --save-dev \
 eslint \
 eslint-config-airbnb-base \
-eslint-config-airbnb-typescript
+eslint-config-airbnb-typescript \
 @typescript-eslint/eslint-plugin \
-@typescript-eslint/parser eslint \
+@typescript-eslint/parser eslint
 */
 
 module.exports = {
@@ -34,6 +34,7 @@ module.exports = {
       impliedStrict: true,
     },
   },
+  ignorePatterns: ['!.stylelintrc.js'], // include .stylelintrc.js
   rules: {
     ...{
       // newlines
@@ -42,15 +43,15 @@ module.exports = {
       '@typescript-eslint/lines-between-class-members': 'off', // I prefer base lines-between-class-members, which accepts exceptAfterSingleLine
       '@typescript-eslint/padding-line-between-statements': ['warn',
         { blankLine: 'always', prev: '*', next: 'return' },
-        { blankLine: 'any', prev: 'const', next: 'return' },
+        { blankLine: 'any', prev: 'singleline-const', next: 'return' },
         { blankLine: 'always', prev: '*', next: 'if' },
-        { blankLine: 'any', prev: 'const', next: 'if' },
+        { blankLine: 'any', prev: 'singleline-const', next: 'if' },
         { blankLine: 'always', prev: '*', next: 'do' },
-        { blankLine: 'any', prev: 'const', next: 'do' },
+        { blankLine: 'any', prev: 'singleline-const', next: 'do' },
         { blankLine: 'always', prev: '*', next: 'while' },
-        { blankLine: 'any', prev: 'const', next: 'while' },
+        { blankLine: 'any', prev: 'singleline-const', next: 'while' },
         { blankLine: 'always', prev: '*', next: 'try' },
-        { blankLine: 'any', prev: 'const', next: 'try' },
+        { blankLine: 'any', prev: 'singleline-const', next: 'try' },
         { blankLine: 'always', prev: '*', next: 'throw' },
         { blankLine: 'always', prev: 'break', next: '*' },
         { blankLine: 'always', prev: 'directive', next: '*' },
@@ -78,14 +79,15 @@ module.exports = {
         objectLiteralTypeAssertions: 'allow-as-parameter',
       }],
       // '@typescript-eslint/consistent-type-imports': ['warn'], // wait until import/no-duplicate can auto-merge type imports
+      '@typescript-eslint/explicit-function-return-type': ['warn', { allowExpressions: true }],
       'import/extensions': ['warn', 'never'],
       'import/order': ['warn', {
         'groups': ['builtin', 'external', 'internal', 'unknown', 'parent', 'sibling', 'index', 'object'],
         'newlines-between': 'always-and-inside-groups',
         'alphabetize': { order: 'asc' },
       }],
-      'import/prefer-default-export': 'off', // in fact, favour named exports
-      'import/no-default-export': ['warn'], // these are acceptable/ may be necessary when interfacing with some tools
+      'import/prefer-default-export': 'off',
+      'import/no-default-export': ['warn'],
       'indent': 'off',
       '@typescript-eslint/indent': ['warn', 2, { SwitchCase: 0 }],
       'max-len': ['warn', 140, 4, {
@@ -113,7 +115,7 @@ module.exports = {
       '@typescript-eslint/switch-exhaustiveness-check': ['error'],
       'func-names': ['warn', 'as-needed'],
       'global-require': 'off', // deprecated, see https://eslint.org/docs/rules/global-require
-      'import/no-extraneous-dependencies': ['error', { devDependencies: ['webpack.config.ts', 'tooling/**/*.{js,ts}'] }],
+      'import/no-extraneous-dependencies': ['warn', { devDependencies: true }],
       'no-empty-function': 'off',
       '@typescript-eslint/no-empty-function': ['error'],
       'no-unused-private-class-members': ['error'],
@@ -127,4 +129,11 @@ module.exports = {
       '@typescript-eslint/no-shadow': ['error', { allow: ['_'] }],
     },
   },
+  overrides: [{
+    files: ['{webpack,vite}.config.ts', 'tooling/**/*.{js,ts}', '**/*.d.ts'],
+    rules: {
+      'import/no-extraneous-dependencies': ['warn', { devDependencies: true }],
+      'import/no-default-export': 'off',
+    },
+  }],
 };

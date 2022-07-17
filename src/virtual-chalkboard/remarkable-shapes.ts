@@ -1,12 +1,12 @@
-import 'd3-selection-multi';
-
 import { Circle, Segment } from 'geometries/module';
-import { angularBisector, bisector, circle, line, Mark, point, type Shape, type ShapeAngle, type ShapeSide, type ShapeVertex } from 'shapes/module';
+import { angularBisector, bisector, circle, line, point, type Shape } from 'shapes/module';
 import { pairs } from 'utils/arrays';
 import { forSure } from 'utils/maybe';
-import { maxBy, type Tuple } from 'utils/utils';
+import { maxBy } from 'utils/utils';
 
-export function remarkableShapes(vertices: Tuple<ShapeVertex, 3>, sides: Tuple<ShapeSide, 3>, angles: Tuple<ShapeAngle, 3>): Shape[] {
+import { Triangle } from './proximity';
+
+export function remarkableShapes({ vertices, sides, angles }: Triangle): Shape[] {
   const triangle = [vertices, sides, angles];
   const lines = [
     sides.map(bisector),
@@ -15,12 +15,11 @@ export function remarkableShapes(vertices: Tuple<ShapeVertex, 3>, sides: Tuple<S
     sides.map(s => line(s.geometry.extend(), { name: `${s.name} (extended)`, parents: [s] })),
   ];
 
-  const largestAngle = maxBy(angles, ({ geometry: θ }) => Math.abs(θ.angle)).geometry;
+  const largestAngle = maxBy(angles, ({ geometry: { angle } }) => Math.abs(angle)).geometry;
   const enclosingCentre = new Segment(largestAngle.A, largestAngle.C).midpoint;
   const obtuseEnclosing = circle(new Circle(enclosingCentre, enclosingCentre.distanceFrom(largestAngle.A)), {
     name: 'Smallest circle enclosing ABC',
     parents: sides,
-    marks: [new Mark('x', enclosingCentre, 0)],
   });
 
   if (largestAngle.isNearlyStraight()) {

@@ -1,6 +1,33 @@
-@import url('https://fonts.googleapis.com/css2?family=Overlock&display=swap');
+@font-face {
+  // See https://fonts.googleapis.com/css2?family=Baloo+2
+  // 1. Get the 'latin' font-face
+  // 2. Exclude the 'space' character (U+0020)
+  // 3. Simply skip all the control codepoints too (U+0000-0019)
 
-$background: hsl(223deg 14% 10%);
+  font-display: swap;
+  font-family: "Baloo 2";
+  font-style: normal;
+  font-weight: 400;
+  src: url("https://fonts.gstatic.com/s/baloo2/v14/wXK0E3kTposypRydzVT08TS3JnAmtdgazZpo_lc.woff2") format("woff2");
+  unicode-range:
+    U+0021-00FF,
+    U+0131,
+    U+0152-0153,
+    U+02BB-02BC,
+    U+02C6,
+    U+02DA,
+    U+02DC,
+    U+2000-206F,
+    U+2074,
+    U+20AC,
+    U+2122,
+    U+2191,
+    U+2193,
+    U+2212,
+    U+2215,
+    U+FEFF,
+    U+FFFD;
+}
 
 html,
 body {
@@ -10,70 +37,5 @@ body {
 
 body {
   display: grid;
-  background-color: $background;
-  font-family: 'Overlock', sans-serif;
-  font-size: larger;
   place-items: stretch;
-}
-
-svg {
-  defs .mark {
-    shape-rendering: geometricPrecision;
-    stroke: white;
-    stroke-dasharray: none;
-    stroke-width: 1.5;
-  }
-
-  #hovered-background {
-    fill: $background;
-    filter: blur(5px);
-    stroke: none;
-  }
-
-  text {
-    fill: ghostwhite;
-    letter-spacing: 0.1em;
-    pointer-events: none;
-    text-anchor: middle;
-  }
-
-  .hovered:not(.point) {
-    stroke: crimson;
-    stroke-width: 2;
-  }
-
-  .parent {
-    stroke: chocolate !important;
-    stroke-width: 2;
-  }
-
-  path {
-    fill: none;
-    stroke: #555;
-    stroke-dasharray: 10 3;
-    
-    &.vertex, &.point {
-      stroke: white;
-      stroke-dasharray: none;
-    }
-
-    &.vertex {
-      stroke-width: 2;
-    }
-
-    &.side {
-      stroke: ghostwhite;
-      stroke-dasharray: none;
-      stroke-width: 2;
-    }
-
-    &.angle {
-      stroke: lightgrey;
-      stroke-dasharray: none;
-    }
-  }
-
-  .hovering path:not(.parent, .hovered, .side, .vertex) {
-    stroke: #383838;
-  }
 }

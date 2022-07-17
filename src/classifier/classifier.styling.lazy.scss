@@ -1,0 +1,39 @@
+@import "../colours";
+
+:host {
+  display: grid;
+  place-items: stretch;
+  pointer-events: none;
+}
+
+path {
+  fill: none;
+  shape-rendering: geometricprecision;
+  stroke: #888;
+  stroke-width: 1.5;
+}
+
+.ticks path,
+.arcs-inner path {
+  stroke: ghostwhite;
+}
+
+text {
+  alignment-baseline: after-edge;
+  fill: ghostwhite;
+  text-anchor: middle;
+
+  &#and {
+    fill: #aaa;
+  }
+
+  @at-root .arcs-values & {
+    alignment-baseline: middle;
+    font-size: 12px !important;
+    letter-spacing: 0 !important;
+    paint-order: stroke fill;
+    stroke: $background;
+    stroke-width: 4px;
+    text-anchor: middle;
+  }
+}

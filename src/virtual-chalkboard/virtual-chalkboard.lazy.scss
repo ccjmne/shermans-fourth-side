@@ -1,0 +1,79 @@
+@import "../colours";
+
+:host {
+  display: grid;
+  background-color: $background;
+}
+
+::part(svg-text),
+[part="svg-text"] {
+  font-family: "Baloo 2", sans-serif;
+  font-size: 18px;
+  letter-spacing: 0.1em;
+}
+
+triangle-classifier {
+  position: absolute;
+  bottom: 0;
+  place-self: center;
+}
+
+svg {
+  place-self: stretch;
+}
+
+defs .mark {
+  shape-rendering: geometricprecision;
+  stroke: white;
+  stroke-dasharray: none;
+  stroke-width: 1.5;
+}
+
+#hovered-background {
+  fill: $background;
+  filter: blur(5px);
+  stroke: none;
+}
+
+text {
+  fill: ghostwhite;
+  pointer-events: none;
+  text-anchor: middle;
+}
+
+.hovered:not(.point) {
+  stroke: crimson;
+  stroke-width: 2;
+}
+
+.parent {
+  stroke: chocolate !important;
+  stroke-width: 2;
+}
+
+path {
+  fill: none;
+  stroke: #555;
+  stroke-dasharray: 10 3;
+
+  &.vertex,
+  &.point {
+    stroke: white;
+    stroke-dasharray: none;
+  }
+
+  &.vertex {
+    stroke-width: 2;
+  }
+
+  &.side {
+    stroke: ghostwhite;
+    stroke-dasharray: none;
+    stroke-width: 2;
+  }
+
+  &.angle {
+    stroke: lightgrey;
+    stroke-dasharray: none;
+  }
+}

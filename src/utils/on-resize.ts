@@ -44,10 +44,10 @@ export function onResize(
   { init, ...options }: ResizeObserverOptions & { init: boolean } = { init: false },
 ): Observable<DOMRect> {
   // Defer actually observing the element until the returned `Observable` is subscribed to
-  return defer<Observable<DOMRect>>(() => {
+  return defer(() => {
     observe(elem, options);
 
-    return new Observable(subscription => RESIZES.pipe(
+    return new Observable<DOMRect>(subscription => RESIZES.pipe(
       map(entries => entries.find(({ target }) => target === elem)),
       filter(isNotNil),
       map(({ contentRect }) => contentRect),

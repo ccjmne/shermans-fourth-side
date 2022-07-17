@@ -1,13 +1,13 @@
 import { resolve } from 'path';
 
 import { CleanWebpackPlugin } from 'clean-webpack-plugin';
-import HtmlWebpackPlugin, { MinifyOptions } from 'html-webpack-plugin';
-import MiniCssExtractPlugin from 'mini-css-extract-plugin';
-// import svgToMiniDataURI from 'mini-svg-data-uri';
-import { Configuration, EntryObject, WebpackPluginInstance } from 'webpack';
-import { Configuration as DevServerConfiguration } from 'webpack-dev-server';
+import HtmlWebpackPlugin, { type MinifyOptions } from 'html-webpack-plugin';
+import { type Configuration, type EntryObject } from 'webpack';
 
+import 'webpack-dev-server'; // expands type Configuration
 import { author, description, keywords, name } from './package.json';
+
+// import svgToMiniDataURI from 'mini-svg-data-uri';
 
 const HTML_MINIFY_OPTS: MinifyOptions = {
   removeComments: true,
@@ -26,7 +26,7 @@ const dist = resolve(__dirname, 'dist');
 export default ( // eslint-disable-line import/no-default-export
   _env: string,
   { mode }: { mode?: 'production' | 'development' } = { mode: 'production' },
-): Configuration & { devServer: DevServerConfiguration } => ({
+): Configuration => ({
   entry: {
     // FIXME: individual entries/chunks messes with HMR, sadly
     // scss: resolve(src, 'index.scss'),
@@ -44,34 +44,55 @@ export default ( // eslint-disable-line import/no-default-export
     }, {
       test: /exported-vars\.scss$/,
       use: [
-        MiniCssExtractPlugin.loader,
-        {
-          loader: 'css-loader',
-          options: { modules: { compileType: 'icss' } },
-        },
+        'style-loader',
+        // 'css-modules-typescript-loader',
+        { loader: 'css-loader', options: { modules: 'icss', sourceMap: mode === 'development' } },
         'sass-loader',
       ],
     }, {
-      test: /(?<!exported-vars)\.scss?$/,
-      use: [MiniCssExtractPlugin.loader, 'css-loader', 'sass-loader'],
+      test: /\.lazy\.scss?$/,
+      use: [
+        {
+          loader: 'style-loader',
+          options: {
+            injectType: 'lazyStyleTag',
+            insert: function insertAt(element: HTMLStyleElement, options: { target?: HTMLElement } = {}): void {
+              (options.target ?? document.head).appendChild(element);
+            },
+          },
+        },
+        { loader: 'css-loader', options: { sourceMap: mode === 'development' } },
+        'sass-loader',
+      ],
       exclude: /node_modules/,
     }, {
-      test: /\.html$/,
-      use: [{
-        loader: 'html-loader',
-        options: {
-          esModule: false,
-          sources: {
-            list: [
-              { tag: 'img', attribute: 'src', type: 'src' },
-              { tag: 'img', attribute: 'data-src', type: 'src' },
-              { tag: 'video', attribute: 'src', type: 'src' },
-              { tag: 'video', attribute: 'data-src', type: 'src' },
-            ],
+      test: /(?<!exported-vars|\.lazy)\.scss?$/,
+      use: [
+        'style-loader',
+        { loader: 'css-loader', options: { sourceMap: mode === 'development' } },
+        'sass-loader',
+      ],
+      exclude: /node_modules/,
+    }, {
+      test: /\.template\.html$/,
+      use: 'template-element-loader',
+    }, {
+      test: /(?<!\.template)\.html$/,
+      use: [
+        {
+          loader: 'html-loader',
+          options: {
+            sources: {
+              list: [
+                { tag: 'img', attribute: 'src', type: 'src' },
+                { tag: 'img', attribute: 'data-src', type: 'src' },
+                { tag: 'video', attribute: 'src', type: 'src' },
+                { tag: 'video', attribute: 'data-src', type: 'src' },
+              ],
+            },
+            minimize: mode === 'production' && HTML_MINIFY_OPTS,
           },
-          minimize: mode === 'production' && HTML_MINIFY_OPTS,
-        },
-      }],
+        }],
       // }, {
       //   test: /\.svg$/,
       //   // see https://webpack.js.org/guides/asset-modules/
@@ -86,8 +107,8 @@ export default ( // eslint-disable-line import/no-default-export
     modules: [src, resolve(__dirname, 'node_modules'), 'node_modules'],
     mainFields: ['webpack', 'module', 'browser', 'web', 'browserify', ['jam', 'main'], 'main'],
   },
-  plugins: ([] as WebpackPluginInstance[]).concat(
-    new MiniCssExtractPlugin({ filename: '[name].css', chunkFilename: '[id].css' }),
+  plugins: [
+    // new MiniCssExtractPlugin({ filename: '[name].css', chunkFilename: '[id].css' }),
     mode === 'production' ? new CleanWebpackPlugin() : [],
     new HtmlWebpackPlugin({
       title: name,
@@ -96,7 +117,7 @@ export default ( // eslint-disable-line import/no-default-export
       filename: resolve(dist, 'index.html'),
       minify: HTML_MINIFY_OPTS,
     }),
-  ),
+  ].flat(),
   devtool: mode === 'development' ? 'source-map' : false,
   devServer: {
     hot: true,

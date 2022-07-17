@@ -1,4 +1,4 @@
-import { Definitely, isNotNil, Maybe } from './maybe';
+import { Definitely, Maybe } from './maybe';
 
 type TupleRec<T, N extends number, R extends unknown[]> = R['length'] extends N ? R : TupleRec<T, N, [T, ...R]>;
 export type Tuple<T, N extends number> = N extends N ? number extends N ? T[] : { length: N } & TupleRec<T, N, []> : never;
@@ -48,12 +48,16 @@ export function aggregate<T, K extends string, V = T[]>(
   );
 }
 
-export function zip<T>(a: T[], b: T[]): ReadonlyArray<[T, T]> {
+export function zip<A, B>(a: A[], b: B[]): ReadonlyArray<[A, B]> {
   if (a.length !== b.length) {
     throw new Error(`Expected arrays to be of equal length. ${a.length} !== ${b.length}`);
   }
 
   return a.map((t, i) => [t, b[i]]);
+}
+
+export function merge<A extends object, B extends object>(a: A[], b: B[]): ReadonlyArray<A & B> {
+  return zip(a, b).map(([l, r]) => ({ ...l, ...r }));
 }
 
 export function occurrences<T>(
@@ -89,34 +93,10 @@ export function count<T>(items: T[], when: (item: T) => boolean): number {
   return items.reduce((total, item) => total + +when(item), 0);
 }
 
-export function mapFind<T, R>(items: T[], map: (t: T) => R, find: (r: R) => boolean = isNotNil): Maybe<R> {
-  return items.reduce((r, t) => r ?? (rt => (find(rt) ? rt : null))(map(t)), null as Maybe<R>);
-}
-
 // eslint-disable-next-line @typescript-eslint/ban-types
-export function memoize<T extends Function>(f: T, mem = new Map()): T {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-  return ((...args: unknown[]) => (k => (mem.has(k) || mem.set(k, f(...args))) && mem.get(k))(JSON.stringify(args))) as unknown as T;
-}
-
-/* eslint-disable max-len */
-export const Styles = Object.freeze({ BLACK: 1, RED: 2, GREEN: 4, YELLOW: 8, BLUE: 16, MAGENTA: 32, CYAN: 64, WHITE: 128, RESET: 256, BRIGHT: 512, DIM: 1024, UNDERSCORE: 2048, BLINK: 4096, REVERSE: 8192, HIDDEN: 16384 });
-const STYLES_MAP = { [Styles.BLACK]: '\x1b[30m', [Styles.RED]: '\x1b[31m', [Styles.GREEN]: '\x1b[32m', [Styles.YELLOW]: '\x1b[33m', [Styles.BLUE]: '\x1b[34m', [Styles.MAGENTA]: '\x1b[35m', [Styles.CYAN]: '\x1b[36m', [Styles.WHITE]: '\x1b[37m', [Styles.RESET]: '\x1b[0m', [Styles.BRIGHT]: '\x1b[1m', [Styles.DIM]: '\x1b[2m', [Styles.UNDERSCORE]: '\x1b[4m', [Styles.BLINK]: '\x1b[5m', [Styles.REVERSE]: '\x1b[7m', [Styles.HIDDEN]: '\x1b[8m' };
-/* eslint-enable max-len */
-
-/**
- * @param { string } text
- * @param { number } styles A combination of flags from `Styles`. For example:
- * ```
- * Styles.BRIGHT | Styles.UNDERSCORE
- * ```
- * @returns { string }
- */
-export function style(text: string, styles: number): string {
-  return Object.entries(STYLES_MAP)
-    .filter(([flag]) => !!(styles & +flag)) // eslint-disable-line no-bitwise
-    .map(([, esc]) => esc)
-    .join('')
-    + text
-    + STYLES_MAP[Styles.RESET];
+export function memoize<T extends Function>(f: T, mem = new Map<string, unknown>()): T {
+  return ((...args: unknown[]) => {
+    const k = JSON.stringify(args);
+    return (mem.has(k) || mem.set(k, f(...args))) && mem.get(k);
+  }) as unknown as T;
 }
