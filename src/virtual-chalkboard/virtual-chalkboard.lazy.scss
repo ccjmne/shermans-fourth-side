@@ -20,6 +20,10 @@ triangle-classifier {
 
 svg {
   place-self: stretch;
+
+  // Add support for touch events using pointer-up|down|move as drop-in replacement for mouse- events
+  // See https://stackoverflow.com/questions/48124372/pointermove-event-not-working-with-touch-why-not
+  touch-action: none;
 }
 
 defs .mark {

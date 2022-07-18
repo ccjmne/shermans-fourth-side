@@ -85,7 +85,7 @@ export class ShapesCompiler {
     throw new UnreachableCaseError(shape);
   }
 
-  public toLocalCoords({ clientX, clientY }: MouseEvent): Point {
+  public toLocalCoords({ clientX, clientY }: PointerEvent): Point {
     return new Point(this.λ.local(clientX - this.Ω.x), this.λy.local(clientY - this.Ω.y));
   }
 

@@ -64,7 +64,7 @@ class VirtualChalkboard extends RxElement {
     this.measurer = this.svg.querySelector('defs text#measurer') as SVGTextElement;
 
     const shapes$: Subject<Shape[]> = new ReplaySubject(1);
-    const mouse$: Subject<Point> = new Subject();
+    const mouse$: Subject<Point> = new ReplaySubject(1);
     const compiler$: Subject<ShapesCompiler> = new ReplaySubject(1);
 
     const hovered$ = new Subject<Maybe<Shape>>();
@@ -104,7 +104,7 @@ class VirtualChalkboard extends RxElement {
       takeUntil(super.disconnected),
     ).subscribe(compiler$);
 
-    merge(fromEvent<MouseEvent>(this.svg, 'mousemove'), fromEvent<MouseEvent>(this.svg, 'touchmove', { passive: true })).pipe(
+    merge(fromEvent<PointerEvent>(this.svg, 'pointermove'), fromEvent<PointerEvent>(this.svg, 'pointerdown')).pipe(
       withLatestFrom(compiler$),
       map(([mouse, compiler]) => compiler.toLocalCoords(mouse)),
       takeUntil(super.disconnected),
@@ -143,7 +143,7 @@ class VirtualChalkboard extends RxElement {
       takeUntil(super.disconnected),
     ).subscribe(hovered$);
 
-    merge(fromEvent(this.svg, 'mousedown'), fromEvent(this.svg, 'touchstart', { passive: true })).pipe(
+    fromEvent(this.svg, 'pointerdown').pipe(
       tap(e => e.preventDefault()),
       withLatestFrom(hovered$),
       map(([, hovered]) => hovered),
@@ -152,7 +152,7 @@ class VirtualChalkboard extends RxElement {
       exhaustMap(([{ id }, [{ geometry: A }, { geometry: B }, { geometry: C }]]) => mouse$.pipe(
         map(at => this.points$.next({ A, B, C, [id]: at, flexible: id })),
         map(() => true),
-        takeUntil(merge(fromEvent(this.svg, 'mouseup'), fromEvent(this.svg, 'touchend'))),
+        takeUntil(fromEvent(this.svg, 'pointerup')),
         endWith(false),
       )),
       distinctUntilChanged(),
