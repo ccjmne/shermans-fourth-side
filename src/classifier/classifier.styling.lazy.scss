@@ -13,11 +13,10 @@ path {
   fill: none;
   stroke: #888;
   stroke-width: 1.5;
-}
 
-.ticks path,
-.arcs-inner path {
-  stroke: ghostwhite;
+  @at-root .ticks &, .arcs &, .vertices & {
+    stroke: ghostwhite;
+  }
 }
 
 text {

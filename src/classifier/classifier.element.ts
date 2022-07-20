@@ -20,6 +20,8 @@ import template from './classifier.template.html';
 
 type ObservedAttribute = keyof Classification;
 type ArcAttrs = { angle: number, orient: number, radius: number, rightangle: number, progress: number };
+
+const PROGRESS = local<number>();
 const TICKS = local<number>();
 const ANGLE_ATTRS = local<ArcAttrs>();
 
@@ -55,6 +57,11 @@ function anglePath({ angle, orient, radius, rightangle, progress }: ArcAttrs): s
     A${ellipsis} ${ellipsis} , 0 , 0 0 , ${through.Δx} ${-through.Δy}
     ${progress <= .5 ? '' : `
     A${ellipsis} ${ellipsis} , 0 , 0 0 , ${to.Δx}      ${-to.Δy}`}`;
+}
+
+function vertexPath(progress: number): string {
+  const [SIZE, one, two] = [10, Math.min(progress, .5) * 2, Math.max(progress - .5, 0) * 2];
+  return `M${-SIZE / 2},${-SIZE / 2} l${SIZE * one},${SIZE * one} M${SIZE / 2},${-SIZE / 2} l${-SIZE * two},${SIZE * two}`;
 }
 
 function animateDy({ length }: string, from: number, to: number): (T: number) => string {
@@ -135,9 +142,10 @@ export class Classifier extends RxElement {
   private updateLateralTicks(apex: Point, type: Classification['lateral']): void {
     this.assertInitialised();
 
+    const points = [new Point(0, 0), apex, new Point(1, 0)];
     this.g.select<SVGGElement>('g#lateral').select('g.ticks').selectAll<SVGPathElement, null>('path')
       .data(merge(
-        pairs([new Point(0, 0), apex, new Point(1, 0)])
+        pairs(points)
           .map(([A, B]) => sortBy([A, B], ({ x }) => x)) // always draw marks from left to right
           .map(([from, to]) => new Segment(from, to))
           .map(({ midpoint: at, vector: { angle } }) => ({ at, angle })),
@@ -146,6 +154,13 @@ export class Classifier extends RxElement {
       .join(
         enter => Classifier.transitionTicks(enter.append('path')),
         update => Classifier.transitionTicks(update),
+      );
+
+    this.g.select<SVGGElement>('g#lateral').select('g.vertices').selectAll<SVGPathElement, null>('path')
+      .data(zip(points, type === 'Degenerate' ? [1, 1, 1] : [0, 0, 0]).map(([at, progress]) => ({ at, progress })))
+      .join(
+        enter => Classifier.transitionVertices(enter.append('path')),
+        update => Classifier.transitionVertices(update),
       );
   }
 
@@ -169,11 +184,18 @@ export class Classifier extends RxElement {
         update => Classifier.transitionValues(update, type),
       );
 
-    this.g.select<SVGGElement>('g#angular').select('g.arcs-inner').selectAll<SVGPathElement, null>('path')
+    this.g.select<SVGGElement>('g#angular').select('g.arcs').selectAll<SVGPathElement, null>('path')
       .data(data)
       .join(
         enter => Classifier.transitionArcs(enter.append('path')),
         update => Classifier.transitionArcs(update),
+      );
+
+    this.g.select<SVGGElement>('g#angular').select('g.vertices').selectAll<SVGPathElement, null>('path')
+      .data(zip(points, type === 'Degenerate' ? [1, 1, 1] : [0, 0, 0]).map(([at, progress]) => ({ at, progress })))
+      .join(
+        enter => Classifier.transitionVertices(enter.append('path')),
+        update => Classifier.transitionVertices(update),
       );
   }
 
@@ -202,6 +224,17 @@ export class Classifier extends RxElement {
         );
 
         return t => anglePath(ANGLE_ATTRS.set(this, i(t)));
+      });
+  }
+
+  private static transitionVertices(
+    selection: Selection<SVGPathElement, { at: Point, progress: number }, BaseType, unknown>,
+  ): Transition<SVGPathElement, { at: Point, progress: number }, BaseType, unknown> {
+    return transition(selection)
+      .attr('transform', ({ at: { x, y } }) => `translate(${λ(x)},${λy(y)})`)
+      .attrTween('d', function interpolate(this: SVGPathElement, { progress }) {
+        const i = interpolateNumber(PROGRESS.get(this) ?? 0, progress);
+        return t => vertexPath(PROGRESS.set(this, i(t)));
       });
   }
 
