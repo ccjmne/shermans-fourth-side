@@ -19,7 +19,7 @@ import style from './classifier.styling.lazy.scss';
 import template from './classifier.template.html';
 
 type ObservedAttribute = keyof Classification;
-type ArcAttrs = { angle: number, orient: number, radius: number, rightangle: number, open: number };
+type ArcAttrs = { angle: number, orient: number, radius: number, rightangle: number, progress: number };
 const TICKS = local<number>();
 const ANGLE_ATTRS = local<ArcAttrs>();
 
@@ -43,17 +43,17 @@ function ticksPath(n: number): string {
   ).join('')}`;
 }
 
-function anglePath({ angle, orient, radius, rightangle, open }: ArcAttrs): string {
+function anglePath({ angle, orient, radius, rightangle, progress }: ArcAttrs): string {
   const from = Vector.fromAngle(orient).resize(radius);
-  const to = from.rotate(angle * open);
+  const to = from.rotate(angle * progress);
   // Push away the midway point iff shaping a right-angle mark
-  const through = from.rotate(angle * Math.min(open, .5)).resize(radius * (1 + rightangle * (Math.SQRT2 - 1)));
+  const through = from.rotate(angle * Math.min(progress, .5)).resize(radius * (1 + rightangle * (Math.SQRT2 - 1)));
   // Straighten the 'arc' when drawing a right-angle mark by increasing the ellipsis radius
   const ellipsis = radius + 100 * rightangle ** 2;
 
   return `M${from.Δx},${-from.Δy}
     A${ellipsis} ${ellipsis} , 0 , 0 0 , ${through.Δx} ${-through.Δy}
-    ${open <= .5 ? '' : `
+    ${progress <= .5 ? '' : `
     A${ellipsis} ${ellipsis} , 0 , 0 0 , ${to.Δx}      ${-to.Δy}`}`;
 }
 
@@ -159,7 +159,7 @@ export class Classifier extends RxElement {
 
     const data = merge(
       zip(points, [...angles.slice(-1), ...angles.slice(0, -1)]).map(([at, angle]) => ({ at, angle })),
-      ({ Degenerate: [0, 0, 0], Acute: [1, 1, 1], Right: [0, 1, 0], Obtuse: [0, 1, 0], Equiangular: [1, 1, 1] }[type]).map(open => ({ open })),
+      ({ Degenerate: [0, 0, 0], Acute: [1, 1, 1], Right: [0, 1, 0], Obtuse: [0, 1, 0], Equiangular: [1, 1, 1] }[type]).map(progress => ({ progress })),
     );
 
     this.g.select<SVGGElement>('g#angular').select('g.arcs-values').selectAll<SVGTextElement, null>('text')
@@ -189,16 +189,16 @@ export class Classifier extends RxElement {
   }
 
   private static transitionArcs(
-    selection: Selection<SVGPathElement, { at: Point, angle: Angle, open: number }, BaseType, unknown>,
-  ): Transition<SVGPathElement, { at: Point, angle: Angle, open: number }, BaseType, unknown> {
+    selection: Selection<SVGPathElement, { at: Point, angle: Angle, progress: number }, BaseType, unknown>,
+  ): Transition<SVGPathElement, { at: Point, angle: Angle, progress: number }, BaseType, unknown> {
     return transition(selection)
       .attr('transform', ({ at: { x, y } }) => `translate(${λ(x)},${λy(y)})`)
-      .attrTween('d', function interpolate(this: SVGPathElement, { angle, open }) {
+      .attrTween('d', function interpolate(this: SVGPathElement, { angle, progress }) {
         const area = 150;
         const r = isNearly(angle.angle, 0, εθ) ? 15 : Math.sqrt((area * 2) / angle.angle) || 15;
         const i = interpolateObject(
           ANGLE_ATTRS.get(this),
-          { angle: angle.angle, orient: angle.BA.angle, radius: r, rightangle: +angle.isNearlyRight(), open },
+          { angle: angle.angle, orient: angle.BA.angle, radius: r, rightangle: +angle.isNearlyRight(), progress },
         );
 
         return t => anglePath(ANGLE_ATTRS.set(this, i(t)));
@@ -206,12 +206,12 @@ export class Classifier extends RxElement {
   }
 
   private static transitionValues(
-    selection: Selection<SVGTextElement, { at: Point, angle: Angle, open: number }, BaseType, unknown>,
+    selection: Selection<SVGTextElement, { at: Point, angle: Angle, progress: number }, BaseType, unknown>,
     type: Classification['angular'],
-  ): Transition<SVGTextElement, { at: Point, angle: Angle, open: number }, BaseType, unknown> {
+  ): Transition<SVGTextElement, { at: Point, angle: Angle, progress: number }, BaseType, unknown> {
     return transition(selection)
       .attr('transform', ({ at: { x, y } }) => `translate(${λ(x)},${λy(y)})`)
-      .style('opacity', ({ open }) => open)
+      .style('opacity', ({ progress }) => progress)
       .text(({ angle }) => {
         if (angle.isNearlyRight()) {
           return '90°';
