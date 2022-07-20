@@ -19,14 +19,12 @@ import style from './classifier.styling.lazy.scss';
 import template from './classifier.template.html';
 
 type ObservedAttribute = keyof Classification;
-
-const HEIGHT = 120;
-const TRIANGLE_BASE = 85;
-
 type ArcAttrs = { angle: number, orient: number, radius: number, rightangle: number, open: number };
 const TICKS = local<number>();
 const ANGLE_ATTRS = local<ArcAttrs>();
 
+const HEIGHT = 150;
+const TRIANGLE_BASE = 75;
 const λ = scaleLinear([0, 1], [-TRIANGLE_BASE / 2, TRIANGLE_BASE / 2]);
 const λy = scaleLinear([0, 1], [0, -TRIANGLE_BASE]);
 
@@ -102,23 +100,22 @@ export class Classifier extends RxElement {
   public connectedCallback(): void {
     this.svg = forSure(this.shadowRoot.querySelector('svg'));
     this.style.height = `${HEIGHT}px`;
-    this.svg.setAttribute('preserveAspectRatio', 'xMidYMax slice');
     this.svg.setAttribute('viewBox', `-1000 -${HEIGHT} 2000 ${HEIGHT}`);
     this.g = select(forSure(this.svg.querySelector('g')));
-    this.reposition();
   }
 
   public attributeChangedCallback(name: ObservedAttribute, prev: string, cur: Classification[typeof name]): void {
     if (this.initialised() && cur !== prev) {
-      transition(this.g.select<SVGGElement>(`g#${name}`).select('text').text(cur))
-        .styleTween('opacity', () => String).duration(400).attrTween('dy', () => animateDy(cur, 20, 0));
-
       const xDefault = .3;
       const y90 = Math.sqrt(xDefault - xDefault ** 2);
       const yIso = Math.sqrt(3) / 2;
       const x = { Acute: xDefault, Degenerate: (name === 'lateral' ? .5 : .3), Equiangular: .5, Obtuse: xDefault, Right: xDefault, Scalene: .3, Isosceles: .5, Equilateral: .5 }[cur];
       const y = { Acute: y90 + .2, Degenerate: 0, Equiangular: yIso, Obtuse: y90 - .2, Right: y90, Scalene: yIso - .2, Isosceles: yIso - .2, Equilateral: yIso }[cur];
       const apex = new Point(x, y);
+
+      transition(this.g.select<SVGGElement>(`g#${name} g.triangle`)).attr('transform', `translate(0, ${-65 - λy(apex.y) / 2})`);
+      transition(this.g.select<SVGGElement>(`g#${name}`).select('text').text(cur))
+        .styleTween('opacity', () => String).duration(400).attrTween('dy', () => animateDy(cur, 20, 0));
 
       transition(
         this.g.datum({ angular: this.getAttribute('angular'), lateral: this.getAttribute('lateral') } as Classification)
@@ -132,8 +129,6 @@ export class Classifier extends RxElement {
       } else {
         this.updateAngularArcs(apex, cur as Classification[typeof name]);
       }
-
-      this.reposition();
     }
   }
 
@@ -170,7 +165,7 @@ export class Classifier extends RxElement {
     this.g.select<SVGGElement>('g#angular').select('g.arcs-values').selectAll<SVGTextElement, null>('text')
       .data(data)
       .join(
-        enter => Classifier.transitionValues(enter.append('text').attr('part', 'svg-text'), type),
+        enter => Classifier.transitionValues(enter.append('text'), type),
         update => Classifier.transitionValues(update, type),
       );
 
@@ -230,27 +225,6 @@ export class Classifier extends RxElement {
 
         return type === 'Equiangular' ? '60°' : '<90°';
       });
-  }
-
-  private reposition(): void {
-    this.assertInitialised();
-    const w = this.measure(`${this.getAttribute('lateral') ?? ''}\u00a0\u00a0and\u00a0\u00a0${this.getAttribute('angular') ?? ''}`);
-    const w1 = this.measure(this.getAttribute('lateral') ?? '');
-    const w2 = this.measure(this.getAttribute('angular') ?? '');
-
-    transition(this.g).attr('transform', `translate(${-w / 2}, 0)`);
-    transition(this.g.select<SVGElement>('text#and')).attr('x', w1 + (w - (w1 + w2)) / 2);
-
-    transition(this.g.select<SVGElement>('g#lateral')).attr('transform', `translate(${w1 / 2}, 0)`);
-    transition(this.g.select<SVGElement>('g#angular')).attr('transform', `translate(${w - w2 / 2}, 0)`);
-  }
-
-  private measure(text: string): number {
-    this.assertInitialised();
-    const measurer = forSure(this.svg.querySelector<SVGTextElement>('defs text#measurer'));
-    measurer.textContent = text;
-
-    return measurer.getComputedTextLength();
   }
 
   // @ts-expect-error 'svg' and 'g' aren't `keyof Classifier` because they're private properties.

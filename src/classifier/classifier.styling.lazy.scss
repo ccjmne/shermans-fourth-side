@@ -2,13 +2,15 @@
 
 :host {
   display: grid;
+  border-top: 1px solid #444;
+  backdrop-filter: blur(2px);
+  background-image: radial-gradient(farthest-side at top, rgb(128 128 128 / 15%), rgb(128 128 128 / 0%));
   place-items: stretch;
   pointer-events: none;
 }
 
 path {
   fill: none;
-  shape-rendering: geometricprecision;
   stroke: #888;
   stroke-width: 1.5;
 }
@@ -23,14 +25,19 @@ text {
   fill: ghostwhite;
   text-anchor: middle;
 
-  &#and {
-    fill: #aaa;
+  &.title {
+    alignment-baseline: hanging;
+
+    &.sub {
+      fill: #888;
+      font-size: 16px;
+    }
   }
 
   @at-root .arcs-values & {
     alignment-baseline: middle;
-    font-size: 12px !important;
-    letter-spacing: 0 !important;
+    font-size: 12px;
+    letter-spacing: 0;
     paint-order: stroke fill;
     stroke: $background;
     stroke-width: 4px;
