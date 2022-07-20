@@ -43,11 +43,14 @@ export function remarkableShapes({ vertices, sides, angles }: Triangle): Shape[]
       { name: 'Smallest circle enclosing ABC', parents: sides },
     ),
     pairs(externalAngularBisectors)
-      .map(([{ geometry: engb1 }, { geometry: engb2 }]) => forSure(engb1.intersectWith(engb2))) // this intersection can't be `null`, by geometric definition
-      .flatMap((excentre, i) => [
-        point(excentre, { name: 'Excentre' }),
+      .map(([engb1, engb2], i) => ({
+        parents: [engb1, engb2, forSure(angularBisectors.at(i - 1))],
+        excentre: forSure(engb1.geometry.intersectWith(engb2.geometry)), // this intersection can not be `null`, by geometric definition
+      }))
+      .flatMap(({ excentre, parents }, i) => [
+        point(excentre, { name: `Excentre opposite ${forSure(vertices.at(i - 1)).id}`, parents, marks: parents.flatMap(({ marks }) => marks) }),
         circle(new Circle(excentre, sides[i].geometry.closestPointTo(excentre).distance), {
-          name: `Excircle to ${sides[i].id}`,
+          name: `Excircle tangent to ${sides[i].id}`,
           parents: [sides[i], ...extendedSides.filter(s => !s.parents.includes(sides[i]))],
         }),
       ]),
