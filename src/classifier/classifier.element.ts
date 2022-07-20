@@ -184,7 +184,7 @@ export class Classifier extends RxElement {
       .attr('transform', ({ at: { x, y }, angle }) => `translate(${λ(x)},${λy(y)}) rotate(${angle * (-180 / Math.PI)})`)
       .attrTween('d', function interpolate(this: SVGPathElement, { ticks }) {
         const i = interpolateNumber(TICKS.get(this) ?? 0, ticks);
-        return t => ticksPath(TICKS.set(this, i(t)) as unknown as number);
+        return t => ticksPath(TICKS.set(this, i(t)));
       });
   }
 
@@ -201,9 +201,7 @@ export class Classifier extends RxElement {
           { angle: angle.angle, orient: angle.BA.angle, radius: r, rightangle: +angle.isNearlyRight(), open },
         );
 
-        // TODO: remove casting once typings are fixed
-        // See my PR at https://github.com/DefinitelyTyped/DefinitelyTyped/pull/61154
-        return t => anglePath(ANGLE_ATTRS.set(this, i(t)) as unknown as ArcAttrs);
+        return t => anglePath(ANGLE_ATTRS.set(this, i(t)));
       });
   }
 

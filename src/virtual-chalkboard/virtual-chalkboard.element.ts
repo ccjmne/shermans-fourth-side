@@ -76,7 +76,7 @@ class VirtualChalkboard extends RxElement {
     combineLatest([this.points$, compiler$]).pipe(
       map(([{ flexible, ...points }, { distanceThreshold }]) => {
         const { [flexible]: flexibleVertex, ...fixed } = points;
-        const at = attemptSnapping(flexibleVertex, Object.values(fixed) as Tuple<Point, 2>, distanceThreshold) as unknown as number;
+        const at = attemptSnapping(flexibleVertex, Object.values(fixed) as Tuple<Point, 2>, distanceThreshold);
         return { ...points, [flexible]: at };
       }),
       map(({ A, B, C }) => [
