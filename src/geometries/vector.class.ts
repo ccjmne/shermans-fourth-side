@@ -28,11 +28,11 @@ export class Vector {
 
   public get angle(): number {
     return Math.atan2(this.Δy, this.Δx);
-    // return (Math.atan2(this.Δy, this.Δx) + Math.PI * 2) % (Math.PI * 2);
   }
 
   public resize(m: number): Vector {
-    const λ = m / this.magnitude;
+    // If `this.magnitude` is naught, resizing shall yield another (0, 0) Vector.
+    const λ = m / (this.magnitude || 1);
     return new Vector(this.Δx * λ, this.Δy * λ);
   }
 

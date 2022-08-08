@@ -1,4 +1,5 @@
 import { type Transition } from 'd3';
+import { extent } from 'd3-array';
 import { easeBackOut, easeCircleOut } from 'd3-ease';
 import { interpolateNumber, interpolateObject } from 'd3-interpolate';
 import { scaleLinear } from 'd3-scale';
@@ -8,8 +9,7 @@ import { Angle } from 'geometries/angle.class';
 import { Point } from 'geometries/point.class';
 import { Segment } from 'geometries/segment.class';
 import { Vector } from 'geometries/vector.class';
-import { pairs, sortBy } from 'utils/arrays';
-import { isNearly, εθ } from 'utils/compare';
+import { pairs } from 'utils/arrays';
 import { forSure, isNil, type Has } from 'utils/maybe';
 import { RxElement } from 'utils/rx-element.class';
 import { merge, zip } from 'utils/utils';
@@ -21,14 +21,14 @@ import template from './classifier.template.html';
 type ObservedAttribute = keyof Classification;
 type ArcAttrs = { angle: number, orient: number, radius: number, rightangle: number, progress: number };
 
-const PROGRESS = local<number>();
 const TICKS = local<number>();
 const ANGLE_ATTRS = local<ArcAttrs>();
 
 const HEIGHT = 150;
-const TRIANGLE_BASE = 75;
+const TRIANGLE_HEIGHT = 60;
+const TRIANGLE_BASE = TRIANGLE_HEIGHT;
 const λ = scaleLinear([0, 1], [-TRIANGLE_BASE / 2, TRIANGLE_BASE / 2]);
-const λy = scaleLinear([0, 1], [0, -TRIANGLE_BASE]);
+const λy = scaleLinear([0, 1], [0, -TRIANGLE_HEIGHT]);
 
 function transition<A extends BaseType, B, C extends BaseType, D>(s: Selection<A, B, C, D>): Transition<A, B, C, D> {
   return s.transition().duration(200).ease(easeCircleOut);
@@ -51,7 +51,7 @@ function anglePath({ angle, orient, radius, rightangle, progress }: ArcAttrs): s
   // Push away the midway point iff shaping a right-angle mark
   const through = from.rotate(angle * Math.min(progress, .5)).resize(radius * (1 + rightangle * (Math.SQRT2 - 1)));
   // Straighten the 'arc' when drawing a right-angle mark by increasing the ellipsis radius
-  const ellipsis = radius + 100 * rightangle ** 2;
+  const ellipsis = radius + 120 * rightangle ** 2;
 
   return `M${from.Δx},${-from.Δy}
     A${ellipsis} ${ellipsis} , 0 , 0 0 , ${through.Δx} ${-through.Δy}
@@ -60,8 +60,8 @@ function anglePath({ angle, orient, radius, rightangle, progress }: ArcAttrs): s
 }
 
 function vertexPath(progress: number): string {
-  const [SIZE, one, two] = [10, Math.min(progress, .5) * 2, Math.max(progress - .5, 0) * 2];
-  return `M${-SIZE / 2},${-SIZE / 2} l${SIZE * one},${SIZE * one} M${SIZE / 2},${-SIZE / 2} l${-SIZE * two},${SIZE * two}`;
+  const s = 5 * progress;
+  return `M${-s},${-s} L${s},${s} M${s},${-s} L${-s},${s}`;
 }
 
 function animateDy({ length }: string, from: number, to: number): (T: number) => string {
@@ -82,11 +82,21 @@ function animateDy({ length }: string, from: number, to: number): (T: number) =>
     .join(' ');
 }
 
-/**
- * @param apex Coordinates of the apex point of a triangle whose base coincides with the canonical vector `(1, 0)`.
- */
-function triangle({ x, y }: Point): string {
-  return `M${λ(0)},${λy(0)} L${λ(x)},${λy(y)} L${λ(1)},${λy(0)} z`;
+function triangle([{ x: xA, y: yA }, { x: xB, y: yB }, { x: xC, y: yC }]: [Point, Point, Point]): string {
+  return `M${λ(xA)},${λy(yA)} L${λ(xB)},${λy(yB)} L${λ(xC)},${λy(yC)} z`;
+}
+
+function computeVertices(cls: Classification[keyof Classification]): [Point, Point, Point] {
+  return {
+    Acute: [[0, 0], [3 / 4, 1], [1, 0]],
+    Degenerate: [[0, 0], [.5, 0], [1, 0]],
+    Equiangular: [[0, 0], [.5, Math.sqrt(3) / 2], [1, 0]],
+    Equilateral: [[0, 0], [.5, Math.sqrt(3) / 2], [1, 0]],
+    Isosceles: [[0, 0], [.5, 1], [1, 0]],
+    Obtuse: [[0, 0], [5 / 4, 1], [1, 0]],
+    Right: [[0, 0], [1, 1], [1, 0]],
+    Scalene: [[0, 0], [1 / 4, 1], [1, 0]],
+  }[cls].map(([x, y]) => new Point(x, y)) as [Point, Point, Point];
 }
 
 export class Classifier extends RxElement {
@@ -113,14 +123,9 @@ export class Classifier extends RxElement {
 
   public attributeChangedCallback(name: ObservedAttribute, prev: string, cur: Classification[typeof name]): void {
     if (this.initialised() && cur !== prev) {
-      const xDefault = .3;
-      const y90 = Math.sqrt(xDefault - xDefault ** 2);
-      const yIso = Math.sqrt(3) / 2;
-      const x = { Acute: xDefault, Degenerate: (name === 'lateral' ? .5 : .3), Equiangular: .5, Obtuse: xDefault, Right: xDefault, Scalene: .3, Isosceles: .5, Equilateral: .5 }[cur];
-      const y = { Acute: y90 + .2, Degenerate: 0, Equiangular: yIso, Obtuse: y90 - .2, Right: y90, Scalene: yIso - .2, Isosceles: yIso - .2, Equilateral: yIso }[cur];
-      const apex = new Point(x, y);
-
-      transition(this.g.select<SVGGElement>(`g#${name} g.triangle`)).attr('transform', `translate(0, ${-65 - λy(apex.y) / 2})`);
+      const vertices = computeVertices(cur);
+      const [hi, lo] = extent(vertices.flatMap(({ y }) => y)) as [number, number];
+      transition(this.g.select<SVGGElement>(`g#${name} g.triangle`)).attr('transform', `translate(0, ${-35 - TRIANGLE_HEIGHT / 2 + λy(hi - lo) / 2})`);
       transition(this.g.select<SVGGElement>(`g#${name}`).select('text').text(cur))
         .styleTween('opacity', () => String).duration(400).attrTween('dy', () => animateDy(cur, 20, 0));
 
@@ -128,27 +133,25 @@ export class Classifier extends RxElement {
         this.g.datum({ angular: this.getAttribute('angular'), lateral: this.getAttribute('lateral') } as Classification)
           .select<SVGGElement>(`g#${name}`)
           .select<SVGPathElement>('path'),
-      ).attr('d', triangle(apex));
+      ).attr('d', triangle(vertices));
 
       if (name === 'lateral') {
         // TODO: create issue in ms/TypeScript that requests reevaluation of a type's dependants when it is narrowed
-        this.updateLateralTicks(apex, cur as Classification[typeof name]);
+        this.updateLateralTicks(vertices, cur as Classification[typeof name]);
       } else {
-        this.updateAngularArcs(apex, cur as Classification[typeof name]);
+        this.updateAngularArcs(vertices, cur as Classification[typeof name]);
       }
     }
   }
 
-  private updateLateralTicks(apex: Point, type: Classification['lateral']): void {
+  private updateLateralTicks(vertices: [Point, Point, Point], type: Classification['lateral']): void {
     this.assertInitialised();
 
-    const points = [new Point(0, 0), apex, new Point(1, 0)];
     this.g.select<SVGGElement>('g#lateral').select('g.ticks').selectAll<SVGPathElement, null>('path')
       .data(merge(
-        pairs(points)
-          .map(([A, B]) => sortBy([A, B], ({ x }) => x)) // always draw marks from left to right
+        pairs(vertices)
           .map(([from, to]) => new Segment(from, to))
-          .map(({ midpoint: at, vector: { angle } }) => ({ at, angle })),
+          .map(({ midpoint: at, vector: { angle } }) => ({ at, angle: angle % Math.PI })), // pseudo-LTR AND preserves rotation
         ({ Degenerate: [0, 0, 0], Scalene: [1, 2, 3], Isosceles: [1, 1, 0], Equilateral: [1, 1, 1] }[type]).map(ticks => ({ ticks })),
       ))
       .join(
@@ -157,24 +160,23 @@ export class Classifier extends RxElement {
       );
 
     this.g.select<SVGGElement>('g#lateral').select('g.vertices').selectAll<SVGPathElement, null>('path')
-      .data(zip(points, type === 'Degenerate' ? [1, 1, 1] : [0, 0, 0]).map(([at, progress]) => ({ at, progress })))
+      .data(zip(vertices, type === 'Degenerate' ? [1, 1, 1] : [0, 0, 0]).map(([at, open]) => ({ at, open })))
       .join(
         enter => Classifier.transitionVertices(enter.append('path')),
         update => Classifier.transitionVertices(update),
       );
   }
 
-  private updateAngularArcs(apex: Point, type: Classification['angular']): void {
+  private updateAngularArcs(vertices: [Point, Point, Point], type: Classification['angular']): void {
     this.assertInitialised();
 
-    const points = [new Point(0, 0), apex, new Point(1, 0)];
     const angles = pairs(
-      pairs(points).map(([from, to]) => new Segment(from, to)),
+      pairs(vertices).map(([from, to]) => new Segment(from, to)),
     ).map(([{ from: A, to: B }, { to: C }]) => new Angle(A, B, C));
 
     const data = merge(
-      zip(points, [...angles.slice(-1), ...angles.slice(0, -1)]).map(([at, angle]) => ({ at, angle })),
-      ({ Degenerate: [0, 0, 0], Acute: [1, 1, 1], Right: [0, 1, 0], Obtuse: [0, 1, 0], Equiangular: [1, 1, 1] }[type]).map(progress => ({ progress })),
+      zip(vertices, [...angles.slice(-1), ...angles.slice(0, -1)]).map(([at, angle]) => ({ at, angle })),
+      ({ Degenerate: [0, 0, 0], Acute: [1, 1, 1], Right: [0, 0, 1], Obtuse: [0, 0, 1], Equiangular: [1, 1, 1] }[type]).map(open => ({ open })),
     );
 
     this.g.select<SVGGElement>('g#angular').select('g.arcs-values').selectAll<SVGTextElement, null>('text')
@@ -192,7 +194,7 @@ export class Classifier extends RxElement {
       );
 
     this.g.select<SVGGElement>('g#angular').select('g.vertices').selectAll<SVGPathElement, null>('path')
-      .data(zip(points, type === 'Degenerate' ? [1, 1, 1] : [0, 0, 0]).map(([at, progress]) => ({ at, progress })))
+      .data(zip(vertices, type === 'Degenerate' ? [1, 1, 1] : [0, 0, 0]).map(([at, open]) => ({ at, open })))
       .join(
         enter => Classifier.transitionVertices(enter.append('path')),
         update => Classifier.transitionVertices(update),
@@ -211,16 +213,16 @@ export class Classifier extends RxElement {
   }
 
   private static transitionArcs(
-    selection: Selection<SVGPathElement, { at: Point, angle: Angle, progress: number }, BaseType, unknown>,
-  ): Transition<SVGPathElement, { at: Point, angle: Angle, progress: number }, BaseType, unknown> {
+    selection: Selection<SVGPathElement, { at: Point, angle: Angle, open: number }, BaseType, unknown>,
+  ): Transition<SVGPathElement, { at: Point, angle: Angle, open: number }, BaseType, unknown> {
     return transition(selection)
       .attr('transform', ({ at: { x, y } }) => `translate(${λ(x)},${λy(y)})`)
-      .attrTween('d', function interpolate(this: SVGPathElement, { angle, progress }) {
-        const area = 150;
-        const r = isNearly(angle.angle, 0, εθ) ? 15 : Math.sqrt((area * 2) / angle.angle) || 15;
+      .attrTween('d', function interpolate(this: SVGPathElement, { angle: { angle: θ, BA }, angle, open }) {
+        const r = Math.sqrt(200 * (2 / θ)); // 200 is a constant **area** (in px^2) that the angle should cover
+        const s = ANGLE_ATTRS.get(this);
         const i = interpolateObject(
-          ANGLE_ATTRS.get(this),
-          { angle: angle.angle, orient: angle.BA.angle, radius: r, rightangle: +angle.isNearlyRight(), progress },
+          { ...s, radius: (s?.radius ?? 0) || r },
+          { angle: θ, orient: BA.angle, radius: open ? r : (s?.radius ?? 0), rightangle: +angle.isNearlyRight(), progress: open },
         );
 
         return t => anglePath(ANGLE_ATTRS.set(this, i(t)));
@@ -228,23 +230,20 @@ export class Classifier extends RxElement {
   }
 
   private static transitionVertices(
-    selection: Selection<SVGPathElement, { at: Point, progress: number }, BaseType, unknown>,
-  ): Transition<SVGPathElement, { at: Point, progress: number }, BaseType, unknown> {
+    selection: Selection<SVGPathElement, { at: Point, open: number }, BaseType, unknown>,
+  ): Transition<SVGPathElement, { at: Point, open: number }, BaseType, unknown> {
     return transition(selection)
       .attr('transform', ({ at: { x, y } }) => `translate(${λ(x)},${λy(y)})`)
-      .attrTween('d', function interpolate(this: SVGPathElement, { progress }) {
-        const i = interpolateNumber(PROGRESS.get(this) ?? 0, progress);
-        return t => vertexPath(PROGRESS.set(this, i(t)));
-      });
+      .attr('d', ({ open }) => vertexPath(open));
   }
 
   private static transitionValues(
-    selection: Selection<SVGTextElement, { at: Point, angle: Angle, progress: number }, BaseType, unknown>,
+    selection: Selection<SVGTextElement, { at: Point, angle: Angle, open: number }, BaseType, unknown>,
     type: Classification['angular'],
-  ): Transition<SVGTextElement, { at: Point, angle: Angle, progress: number }, BaseType, unknown> {
+  ): Transition<SVGTextElement, { at: Point, angle: Angle, open: number }, BaseType, unknown> {
     return transition(selection)
       .attr('transform', ({ at: { x, y } }) => `translate(${λ(x)},${λy(y)})`)
-      .style('opacity', ({ progress }) => progress)
+      .style('opacity', ({ open }) => open)
       .text(({ angle }) => {
         if (angle.isNearlyRight()) {
           return '90°';

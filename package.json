@@ -26,6 +26,7 @@
     "url": "https://github.com/ccjmne/shermans-fourth-side/issues"
   },
   "dependencies": {
+    "d3-array": "^3.2.0",
     "d3-ease": "^3.0.1",
     "d3-interpolate": "^3.0.1",
     "d3-scale": "^4.0.2",
