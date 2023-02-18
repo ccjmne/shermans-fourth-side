@@ -3,6 +3,7 @@
 :host {
   display: grid;
   background-color: $background;
+  contain: layout; // new stacking context
 }
 
 ::part(svg-text),

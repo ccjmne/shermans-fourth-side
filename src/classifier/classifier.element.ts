@@ -1,5 +1,4 @@
 import { type Transition } from 'd3';
-import { extent } from 'd3-array';
 import { easeBackOut, easeCircleOut } from 'd3-ease';
 import { interpolateNumber, interpolateObject } from 'd3-interpolate';
 import { scaleLinear } from 'd3-scale';
@@ -12,7 +11,7 @@ import { Vector } from 'geometries/vector.class';
 import { pairs } from 'utils/arrays';
 import { forSure, isNil, type Has } from 'utils/maybe';
 import { RxElement } from 'utils/rx-element.class';
-import { merge, zip } from 'utils/utils';
+import { extentBy, mapTuple, merge, zip, type Tuple } from 'utils/utils';
 import { type Classification } from 'virtual-chalkboard/proximity';
 
 import style from './classifier.styling.lazy.scss';
@@ -25,10 +24,9 @@ const TICKS = local<number>();
 const ANGLE_ATTRS = local<ArcAttrs>();
 
 const HEIGHT = 150;
-const TRIANGLE_HEIGHT = 60;
-const TRIANGLE_BASE = TRIANGLE_HEIGHT;
-const λ = scaleLinear([0, 1], [-TRIANGLE_BASE / 2, TRIANGLE_BASE / 2]);
-const λy = scaleLinear([0, 1], [0, -TRIANGLE_HEIGHT]);
+const TRIANGLE_HEIGHT_PX = 60;
+const λ = scaleLinear([0, 1], [0, TRIANGLE_HEIGHT_PX]);
+const λy = scaleLinear([0, 1], [0, -TRIANGLE_HEIGHT_PX]);
 
 function transition<A extends BaseType, B, C extends BaseType, D>(s: Selection<A, B, C, D>): Transition<A, B, C, D> {
   return s.transition().duration(200).ease(easeCircleOut);
@@ -86,17 +84,18 @@ function triangle([{ x: xA, y: yA }, { x: xB, y: yB }, { x: xC, y: yC }]: [Point
   return `M${λ(xA)},${λy(yA)} L${λ(xB)},${λy(yB)} L${λ(xC)},${λy(yC)} z`;
 }
 
-function computeVertices(cls: Classification[keyof Classification]): [Point, Point, Point] {
+function computeVertices(cls: Classification[keyof Classification]): Tuple<Point, 3> {
+  const [B, EQUI_B] = [1.5, 2 / Math.sqrt(3)];
   return {
-    Acute: [[0, 0], [3 / 4, 1], [1, 0]],
-    Degenerate: [[0, 0], [.5, 0], [1, 0]],
-    Equiangular: [[0, 0], [.5, Math.sqrt(3) / 2], [1, 0]],
-    Equilateral: [[0, 0], [.5, Math.sqrt(3) / 2], [1, 0]],
-    Isosceles: [[0, 0], [.5, 1], [1, 0]],
-    Obtuse: [[0, 0], [5 / 4, 1], [1, 0]],
-    Right: [[0, 0], [1, 1], [1, 0]],
-    Scalene: [[0, 0], [1 / 4, 1], [1, 0]],
-  }[cls].map(([x, y]) => new Point(x, y)) as [Point, Point, Point];
+    Degenerate: [[0, 0], [B / 2, 0], [B, 0]],
+    Scalene: [[0, 0], [.3, 1], [B, 0]],
+    Isosceles: [[0, 0], [B / 2, 1], [B, 0]],
+    Equilateral: [[0, 0], [EQUI_B / 2, 1], [EQUI_B, 0]],
+    Acute: [[0, 0], [B - .3, 1], [B, 0]],
+    Right: [[0, 0], [B, 1], [B, 0]],
+    Obtuse: [[0, 0], [B + .3, 1], [B, 0]],
+    Equiangular: [[0, 0], [EQUI_B / 2, 1], [EQUI_B, 0]],
+  }[cls].map(([x, y]) => new Point(x, y)) as Tuple<Point, 3>;
 }
 
 export class Classifier extends RxElement {
@@ -124,8 +123,9 @@ export class Classifier extends RxElement {
   public attributeChangedCallback(name: ObservedAttribute, prev: string, cur: Classification[typeof name]): void {
     if (this.initialised() && cur !== prev) {
       const vertices = computeVertices(cur);
-      const [hi, lo] = extent(vertices.flatMap(({ y }) => y)) as [number, number];
-      transition(this.g.select<SVGGElement>(`g#${name} g.triangle`)).attr('transform', `translate(0, ${-35 - TRIANGLE_HEIGHT / 2 + λy(hi - lo) / 2})`);
+      const [[xlo, xhi], [ylo, yhi]] = [extentBy(mapTuple(vertices, ({ x }) => x)), extentBy(mapTuple(vertices, ({ y }) => y))];
+      transition(this.g.select<SVGGElement>(`g#${name} g.triangle`))
+        .attr('transform', `translate(${-λ((xlo + xhi) / 2)}, ${-35 - TRIANGLE_HEIGHT_PX / 2 - λy((ylo + yhi) / 2)})`);
       transition(this.g.select<SVGGElement>(`g#${name}`).select('text').text(cur))
         .styleTween('opacity', () => String).duration(400).attrTween('dy', () => animateDy(cur, 20, 0));
 
