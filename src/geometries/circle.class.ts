@@ -1,4 +1,4 @@
-import { ε0 } from 'utils/compare';
+import { isNearly } from 'utils/compare';
 import { minBy, type Tuple } from 'utils/utils';
 
 import { Line } from './line.class';
@@ -44,7 +44,7 @@ export class Circle implements Geometry {
     // (x - u)^2 + (y - v)^2 = r^2
     const { A, B, C } = line;
     const { O: { x: u, y: v }, r } = this;
-    return Math.abs(A) < ε0
+    return isNearly(A, 0)
       // different, simpler equation if A is naught
       // ? roots(1, -2 * u, (C / B) * (C / B + 2 * v) + u ** 2 + v ** 2 - r ** 2).map(x => new Point(x, -C / B))
       ? roots(1, -2 * u, C * (C + 2 * v) + u ** 2 + v ** 2 - r ** 2).map(x => new Point(x, -C)) // Further simplifying, for in that case B is 1, **by implementation**

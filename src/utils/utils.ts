@@ -1,7 +1,15 @@
 import { Definitely, Maybe } from './maybe';
 
+// Modified from https://github.com/Microsoft/TypeScript/issues/26223 and https://stackoverflow.com/a/52490977/2427596
+// to allow for 'const' inference of `N` when passing the `Tuple` as argument.
 type TupleRec<T, N extends number, R extends unknown[]> = R['length'] extends N ? R : TupleRec<T, N, [T, ...R]>;
 export type Tuple<T, N extends number> = N extends N ? number extends N ? T[] : { length: N } & TupleRec<T, N, []> : never;
+
+// All the ECMAScript primitive data types
+// See https://developer.mozilla.org/en-US/docs/Glossary/Primitive
+type Primitive = string | number | bigint | boolean | undefined | symbol | null;
+// All the naturally comparable data types (i.e.: who work as expected with `>`)
+type Natural = Exclude<Primitive, symbol | null | undefined> | { valueOf: () => number };
 
 export function range(length: number, { offset = 0, step = 1 }: { offset?: number, step?: number } = {}): number[] {
   return Array.from({ length }, (_, i) => offset + i * step);
@@ -32,6 +40,10 @@ export function mapValues<V, W>(object: Record<string, V>, by: (value: V, key: s
   return Object.fromEntries(
     Object.entries(object).map(([k, v]) => [k, by(v, k)]),
   );
+}
+
+export function mapTuple<T, N extends number, U = T>(items: Tuple<T, N>, mapper: (t: T) => U = identity): Tuple<U, N> {
+  return items.map(mapper) as Tuple<U, N>;
 }
 
 export function aggregate<T, K extends string, V = T[]>(
@@ -75,18 +87,25 @@ export function select<T>(items: T[], selector: (a: T, b: T) => T): Maybe<T> {
   return items.reduce((most, item) => selector(most, item), items[0]);
 }
 
-export function minBy<T, V>(values: [], by: (item: T) => V): undefined;
-export function minBy<T, V>(values: [T, ...T[]], by: (item: T) => V): Definitely<T>;
-export function minBy<T, V>(values: T[], by: (item: T) => V): Maybe<T>;
-export function minBy<T, V>(values: T[], by: (item: T) => V = identity): Maybe<T> {
+export function minBy<T, V extends Natural>(values: [], by?: (item: T) => V): undefined;
+export function minBy<T, V extends Natural>(values: [T, ...T[]], by?: (item: T) => V): Definitely<T>;
+export function minBy<T, V extends Natural>(values: T[], by?: (item: T) => V): Maybe<T>;
+export function minBy<T, V extends Natural>(values: T[], by: (item: T) => V = identity): Maybe<T> {
   return select(values, (a, b) => (by(b) < by(a) ? b : a));
 }
 
-export function maxBy<T, V>(values: [], by: (item: T) => V): undefined;
-export function maxBy<T, V>(values: [T, ...T[]], by: (item: T) => V): Definitely<T>;
-export function maxBy<T, V>(values: T[], by: (item: T) => V): Maybe<T>;
-export function maxBy<T, V>(values: T[], by: (item: T) => V = identity): Maybe<T> {
+export function maxBy<T, V extends Natural>(values: [], by?: (item: T) => V): undefined;
+export function maxBy<T, V extends Natural>(values: [T, ...T[]], by?: (item: T) => V): Definitely<T>;
+export function maxBy<T, V extends Natural>(values: T[], by?: (item: T) => V): Maybe<T>;
+export function maxBy<T, V extends Natural>(values: T[], by: (item: T) => V = identity): Maybe<T> {
   return select(values, (a, b) => (by(b) > by(a) ? b : a));
+}
+
+export function extentBy<T, V extends Natural>(values: [], by?: (item: T) => V): undefined;
+export function extentBy<T, V extends Natural>(values: [T, ...T[]], by?: (item: T) => V): Definitely<[T, T]>;
+export function extentBy<T, V extends Natural>(values: T[], by?: (item: T) => V): Maybe<[T, T]>;
+export function extentBy<T, V extends Natural>(values: T[], by: (item: T) => V = identity): Maybe<[T, T]> {
+  return values.reduce(([lo, hi], item) => [by(item) < by(lo) ? item : lo, by(item) > by(hi) ? item : hi], [values[0], values[0]]);
 }
 
 export function count<T>(items: T[], when: (item: T) => boolean): number {

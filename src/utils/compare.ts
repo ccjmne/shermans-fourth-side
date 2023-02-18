@@ -6,8 +6,7 @@ export const εθ = 1e-5; // more generous match for angles
  * @returns `true` iff `0 ≤ |a - b| ≤ ε`
  */
 export function isNearly(a: number, b: number, ε: number = ε0): boolean {
-  const Δ = Math.abs(a - b);
-  return Δ <= ε && Δ >= 0;
+  return Math.abs(a - b) <= ε;
 }
 
 /**
